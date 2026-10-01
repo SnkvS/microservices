@@ -1,0 +1,8 @@
+target/
+**/target/
+.idea/
+.vscode/
+.settings/
+*.iml
+*.log
+java-courses-main.zip
