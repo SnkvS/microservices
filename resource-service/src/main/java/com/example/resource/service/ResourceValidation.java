@@ -1,4 +1,4 @@
-package com.example.resource;
+package com.example.resource.service;
 
 import java.util.ArrayList;
 import java.util.List;

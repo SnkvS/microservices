@@ -1,4 +1,8 @@
-package com.example.song;
+package com.example.song.api;
+
+import com.example.song.service.SongConflictException;
+import com.example.song.service.SongNotFoundException;
+import com.example.song.service.SongValidationException;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -12,7 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class SongErrorHandler {
     @ExceptionHandler(SongValidationException.class)
     ResponseEntity<Map<String, Object>> validation(SongValidationException ex) {
-        return ResponseEntity.badRequest().body(Map.of("errorMessage", "Validation error", "details", ex.details, "errorCode", "400"));
+        return ResponseEntity.badRequest().body(Map.of("errorMessage", "Validation error", "details", ex.getDetails(), "errorCode", "400"));
     }
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class, MissingServletRequestParameterException.class})
     ResponseEntity<Map<String, String>> badRequest(Exception ex) {

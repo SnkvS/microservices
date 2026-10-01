@@ -1,4 +1,6 @@
-package com.example.song;
+package com.example.song.persistence;
+
+import com.example.song.api.SongDto;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,9 +18,9 @@ public class SongEntity {
     @Column(nullable = false, length = 4) public String year;
 
     protected SongEntity() {}
-    SongEntity(SongDto dto) {
+    public SongEntity(SongDto dto) {
         id = dto.id(); name = dto.name(); artist = dto.artist(); album = dto.album();
         duration = dto.duration(); year = dto.year();
     }
-    SongDto toDto() { return new SongDto(id, name, artist, album, duration, year); }
+    public SongDto toDto() { return new SongDto(id, name, artist, album, duration, year); }
 }

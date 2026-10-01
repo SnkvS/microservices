@@ -1,4 +1,6 @@
-package com.example.song;
+package com.example.song.service;
+
+import com.example.song.api.SongDto;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

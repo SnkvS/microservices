@@ -1,4 +1,10 @@
-package com.example.resource;
+package com.example.resource.service;
+
+import com.example.resource.integration.Mp3MetadataExtractor;
+import com.example.resource.integration.SongClient;
+import com.example.resource.integration.SongMetadata;
+import com.example.resource.persistence.ResourceEntity;
+import com.example.resource.persistence.ResourceRepository;
 
 import java.util.ArrayList;
 import java.util.List;

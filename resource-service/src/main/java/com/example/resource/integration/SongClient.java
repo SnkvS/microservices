@@ -1,4 +1,4 @@
-package com.example.resource;
+package com.example.resource.integration;
 
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;

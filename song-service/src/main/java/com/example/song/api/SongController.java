@@ -1,4 +1,6 @@
-package com.example.song;
+package com.example.song.api;
+
+import com.example.song.service.SongService;
 
 import java.util.List;
 import java.util.Map;

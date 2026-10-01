@@ -1,4 +1,8 @@
-package com.example.song;
+package com.example.song.service;
+
+import com.example.song.api.SongDto;
+import com.example.song.persistence.SongEntity;
+import com.example.song.persistence.SongRepository;
 
 import java.util.ArrayList;
 import java.util.List;

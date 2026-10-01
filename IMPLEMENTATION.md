@@ -2,6 +2,8 @@
 
 Both Spring Boot services run as local processes. Docker Compose runs only their dedicated PostgreSQL 16 databases.
 
+Each service keeps HTTP controllers and response handling in `api`, business logic and validation in `service`, and JPA entities and repositories in `persistence`. Resource Service keeps Apache Tika parsing and the Song Service HTTP client in `integration`.
+
 1. Start the databases from the project root: `docker compose up -d`.
 2. Build both services: `mvn package`.
 3. In separate terminals, start Song Service with `java -jar song-service/target/song-service-1.0.0.jar` and Resource Service with `java -jar resource-service/target/resource-service-1.0.0.jar`.
@@ -14,7 +16,7 @@ The collection and response specification are in `api-tests/`. The supplied ZIP 
 
 ## Verification performed
 
-- `mvn package` completed successfully.
+- `mvn clean package` completed successfully after the package refactor and removal of `src/test` source files and test dependencies.
 - The supplied Postman collection was run through Newman with only its two blank local file references filled in a temporary copy. All 33 requests and 382 assertions passed. The original collection was unchanged.
 - On this Windows host, both installed Java 26 and a downloaded Java 21 runtime failed while creating a JDK loopback socket. The live services were therefore run locally in WSL Ubuntu with Java 25; PostgreSQL remained in Docker.
 

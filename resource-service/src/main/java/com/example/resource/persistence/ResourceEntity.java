@@ -1,4 +1,4 @@
-package com.example.resource;
+package com.example.resource.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,5 +13,5 @@ public class ResourceEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) public Long id;
     @Column(nullable = false, columnDefinition = "bytea") public byte[] data;
     protected ResourceEntity() {}
-    ResourceEntity(byte[] data) { this.data = data; }
+    public ResourceEntity(byte[] data) { this.data = data; }
 }

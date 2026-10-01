@@ -1,4 +1,4 @@
-package com.example.song;
+package com.example.song.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

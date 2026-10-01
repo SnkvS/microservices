@@ -1,4 +1,6 @@
-package com.example.resource;
+package com.example.resource.api;
+
+import com.example.resource.service.ResourceNotFoundException;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;

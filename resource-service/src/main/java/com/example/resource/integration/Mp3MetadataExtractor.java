@@ -1,4 +1,4 @@
-package com.example.resource;
+package com.example.resource.integration;
 
 import java.io.ByteArrayInputStream;
 import org.apache.tika.Tika;

@@ -1,4 +1,6 @@
-package com.example.resource;
+package com.example.resource.api;
+
+import com.example.resource.service.ResourceService;
 
 import java.util.List;
 import java.util.Map;

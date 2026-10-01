@@ -12,7 +12,7 @@
 
 ## Tasks
 
-1. Scaffold Maven modules, database Compose, and focused validation tests.
-2. Implement Song Service CRUD, validation, and global error handling; run its tests.
-3. Implement Resource Service upload, MP3 extraction, retrieval, deletion, and Song Service calls; run its tests.
+1. Scaffold Maven modules and database Compose.
+2. Implement Song Service CRUD, validation, and global error handling; verify against the API collection.
+3. Implement Resource Service upload, MP3 extraction, retrieval, deletion, and Song Service calls; verify against the API collection.
 4. Build both modules, exercise live API flows with Docker databases, and document run instructions and fixture limitations.

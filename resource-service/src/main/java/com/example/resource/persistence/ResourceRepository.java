@@ -1,4 +1,4 @@
-package com.example.resource;
+package com.example.resource.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
