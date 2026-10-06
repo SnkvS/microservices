@@ -3,6 +3,7 @@ package com.example.song.api;
 import com.example.song.service.SongConflictException;
 import com.example.song.service.SongNotFoundException;
 import com.example.song.service.SongValidationException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,18 @@ public class SongErrorHandler {
     ResponseEntity<Map<String, Object>> validation(SongValidationException ex) {
         return ResponseEntity.badRequest().body(Map.of("errorMessage", "Validation error", "details", ex.getDetails(), "errorCode", "400"));
     }
-    @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class, MissingServletRequestParameterException.class})
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<Map<String, Object>> invalidBody(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof JsonMappingException mapping && !mapping.getPath().isEmpty()) {
+            String field = mapping.getPath().get(mapping.getPath().size() - 1).getFieldName();
+            if (field != null) {
+                String message = "id".equals(field) ? "ID must be a positive integer" : "Field must be a string";
+                return validation(new SongValidationException(Map.of(field, message)));
+            }
+        }
+        return ResponseEntity.badRequest().body(Map.of("errorMessage", "Invalid request", "errorCode", "400"));
+    }
+    @ExceptionHandler({IllegalArgumentException.class, MissingServletRequestParameterException.class})
     ResponseEntity<Map<String, String>> badRequest(Exception ex) {
         String message = ex instanceof IllegalArgumentException ? ex.getMessage() : "Invalid request";
         return ResponseEntity.badRequest().body(Map.of("errorMessage", message, "errorCode", "400"));

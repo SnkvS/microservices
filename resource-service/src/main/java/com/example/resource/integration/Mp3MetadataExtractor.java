@@ -24,7 +24,6 @@ public class Mp3MetadataExtractor {
         }
         String duration = first(metadata, "xmpDM:duration");
         String year = first(metadata, "xmpDM:releaseDate", "year", "date", "dc:date");
-        if (year != null && year.length() >= 4) year = year.substring(0, 4);
         if (duration == null) throw new IllegalArgumentException("Invalid MP3 file: missing duration");
         int seconds;
         try { seconds = (int) Math.floor(Double.parseDouble(duration)); }
