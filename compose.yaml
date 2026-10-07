@@ -2,23 +2,61 @@ services:
   resource-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: resources
-      POSTGRES_USER: resources
-      POSTGRES_PASSWORD: resources
+      POSTGRES_DB: ${RESOURCE_DB_NAME}
+      POSTGRES_USER: ${RESOURCE_DB_USER}
+      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${RESOURCE_DB_PORT}:5432"
     volumes:
-      - resource_data:/var/lib/postgresql/data
+      - ./init-scripts/resource-db:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
   song-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: songs
-      POSTGRES_USER: songs
-      POSTGRES_PASSWORD: songs
+      POSTGRES_DB: ${SONG_DB_NAME}
+      POSTGRES_USER: ${SONG_DB_USER}
+      POSTGRES_PASSWORD: ${SONG_DB_PASSWORD}
     ports:
-      - "5433:5432"
+      - "${SONG_DB_PORT}:5432"
     volumes:
-      - song_data:/var/lib/postgresql/data
-volumes:
-  resource_data:
-  song_data:
+      - ./init-scripts/song-db:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+  resource-service:
+    build: ./resource-service
+    ports:
+      - "${RESOURCE_SERVICE_PORT}:8080"
+    environment:
+      RESOURCE_DB_URL: ${RESOURCE_DB_URL}
+      RESOURCE_DB_USER: ${RESOURCE_DB_USER}
+      RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD}
+      SONG_SERVICE_URL: ${SONG_SERVICE_URL}
+    depends_on:
+      resource-db:
+        condition: service_healthy
+      song-service:
+        condition: service_started
+  song-service:
+    build: ./song-service
+    ports:
+      - "${SONG_SERVICE_PORT}:8081"
+    environment:
+      SONG_DB_URL: ${SONG_DB_URL}
+      SONG_DB_USER: ${SONG_DB_USER}
+      SONG_DB_PASSWORD: ${SONG_DB_PASSWORD}
+    depends_on:
+      song-db:
+        condition: service_healthy
