@@ -2,13 +2,17 @@ package com.example.resource.integration;
 
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
 public class SongClient {
     private final RestClient client;
-    public SongClient(@Value("${song.service.url}") String url) { client = RestClient.builder().baseUrl(url).build(); }
+    public SongClient(@LoadBalanced RestClient.Builder songRestClientBuilder,
+                      @Value("${song.service.url}") String url) {
+        client = songRestClientBuilder.baseUrl(url).build();
+    }
     public void create(SongMetadata metadata) {
         client.post().uri("/songs").body(metadata).retrieve().toBodilessEntity();
     }
