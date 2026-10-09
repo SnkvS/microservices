@@ -1,4 +1,24 @@
 services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "${GATEWAY_PORT:-8082}:8082"
+    environment:
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
+      EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      resource-service:
+        condition: service_started
+      song-service:
+        condition: service_started
   eureka-server:
     build: ./eureka-server
     ports:
