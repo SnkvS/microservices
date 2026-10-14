@@ -1,9 +1,6 @@
 package com.example.resource.api;
 
 import com.example.resource.service.ResourceService;
-
-import java.util.List;
-import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,19 +14,32 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/resources")
 public class ResourceController {
+
     private final ResourceService service;
-    public ResourceController(ResourceService service) { this.service = service; }
-    @PostMapping public ResponseEntity<Map<String, Long>> upload(@RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType, @RequestBody byte[] data) {
+
+    public ResourceController(ResourceService service) {
+        this.service = service;
+    }
+
+    @PostMapping
+    public ResponseEntity<Map<String, Long>> upload(@RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType, @RequestBody byte[] data) {
         return ResponseEntity.ok(Map.of("id", service.upload(contentType, data)));
     }
-    @GetMapping("/{id}") public ResponseEntity<byte[]> get(@PathVariable String id) {
+
+    @GetMapping("/{id}")
+    public ResponseEntity<byte[]> get(@PathVariable String id) {
         byte[] data = service.get(id);
         return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).contentLength(data.length).body(data);
     }
-    @DeleteMapping public ResponseEntity<Map<String, List<Long>>> delete(@RequestParam String id) {
+
+    @DeleteMapping
+    public ResponseEntity<Map<String, List<Long>>> delete(@RequestParam String id) {
         return ResponseEntity.ok(Map.of("ids", service.delete(id)));
     }
 }

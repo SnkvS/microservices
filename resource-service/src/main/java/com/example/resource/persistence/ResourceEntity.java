@@ -10,8 +10,18 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "resources")
 public class ResourceEntity {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) public Long id;
-    @Column(nullable = false, columnDefinition = "bytea") public byte[] data;
-    protected ResourceEntity() {}
-    public ResourceEntity(byte[] data) { this.data = data; }
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public Long id;
+
+    @Column(nullable = false, columnDefinition = "bytea")
+    public byte[] data;
+
+    protected ResourceEntity() {
+    }
+
+    public ResourceEntity(byte[] data) {
+        this.data = data;
+    }
 }

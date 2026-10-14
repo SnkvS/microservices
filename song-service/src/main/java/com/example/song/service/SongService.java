@@ -3,17 +3,21 @@ package com.example.song.service;
 import com.example.song.api.SongDto;
 import com.example.song.persistence.SongEntity;
 import com.example.song.persistence.SongRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SongService {
+
     private final SongRepository repository;
-    public SongService(SongRepository repository) { this.repository = repository; }
+
+    public SongService(SongRepository repository) {
+        this.repository = repository;
+    }
 
     @Transactional
     public long create(SongDto dto) {
@@ -33,7 +37,10 @@ public class SongService {
     public List<Long> delete(String rawIds) {
         List<Long> deleted = new ArrayList<>();
         for (long id : SongValidation.ids(rawIds)) {
-            if (repository.existsById(id)) { repository.deleteById(id); deleted.add(id); }
+            if (repository.existsById(id)) {
+                repository.deleteById(id);
+                deleted.add(id);
+            }
         }
         return deleted;
     }

@@ -11,13 +11,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class SongJsonConfiguration {
+
     @Bean
     Jackson2ObjectMapperBuilderCustomizer strictSongJsonTypes() {
         return builder -> builder
-            .featuresToDisable(DeserializationFeature.ACCEPT_FLOAT_AS_INT, MapperFeature.ALLOW_COERCION_OF_SCALARS)
-            .postConfigurer(mapper -> mapper.coercionConfigFor(LogicalType.Textual)
-                .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
-                .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
-                .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail));
+                .featuresToDisable(DeserializationFeature.ACCEPT_FLOAT_AS_INT, MapperFeature.ALLOW_COERCION_OF_SCALARS)
+                .postConfigurer(mapper -> mapper.coercionConfigFor(LogicalType.Textual)
+                        .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail));
     }
 }

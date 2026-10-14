@@ -1,21 +1,26 @@
 package com.example.resource.integration;
 
-import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.List;
+
 @Component
 public class SongClient {
+
     private final RestClient client;
+
     public SongClient(@LoadBalanced RestClient.Builder songRestClientBuilder,
                       @Value("${song.service.url}") String url) {
         client = songRestClientBuilder.baseUrl(url).build();
     }
+
     public void create(SongMetadata metadata) {
         client.post().uri("/songs").body(metadata).retrieve().toBodilessEntity();
     }
+
     public void delete(List<Long> ids) {
         if (ids.isEmpty()) return;
         String csv = ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));

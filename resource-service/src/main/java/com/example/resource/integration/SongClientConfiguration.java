@@ -7,6 +7,7 @@ import org.springframework.web.client.RestClient;
 
 @Configuration
 public class SongClientConfiguration {
+
     @Bean
     @LoadBalanced
     RestClient.Builder songRestClientBuilder() {

@@ -5,19 +5,25 @@ import com.example.resource.integration.SongClient;
 import com.example.resource.integration.SongMetadata;
 import com.example.resource.persistence.ResourceEntity;
 import com.example.resource.persistence.ResourceRepository;
-
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Service
 public class ResourceService {
+
     private final ResourceRepository repository;
+
     private final Mp3MetadataExtractor extractor;
+
     private final SongClient songs;
+
     public ResourceService(ResourceRepository repository, Mp3MetadataExtractor extractor, SongClient songs) {
-        this.repository = repository; this.extractor = extractor; this.songs = songs;
+        this.repository = repository;
+        this.extractor = extractor;
+        this.songs = songs;
     }
 
     @Transactional
