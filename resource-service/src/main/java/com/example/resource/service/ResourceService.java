@@ -1,54 +1,89 @@
 package com.example.resource.service;
 
-import com.example.resource.integration.Mp3MetadataExtractor;
 import com.example.resource.integration.SongClient;
-import com.example.resource.integration.SongMetadata;
 import com.example.resource.persistence.ResourceEntity;
 import com.example.resource.persistence.ResourceRepository;
+import com.example.resource.storage.ResourceStorage;
+import com.example.resource.storage.StoredResourceLocation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ResourceService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResourceService.class);
+
     private final ResourceRepository repository;
 
-    private final Mp3MetadataExtractor extractor;
+    private final Mp3FileValidator validator;
+
+    private final ResourceStorage storage;
 
     private final SongClient songs;
 
-    public ResourceService(ResourceRepository repository, Mp3MetadataExtractor extractor, SongClient songs) {
+    private final TransactionTemplate uploadTransaction;
+
+    public ResourceService(ResourceRepository repository, Mp3FileValidator validator, ResourceStorage storage,
+                           SongClient songs, PlatformTransactionManager transactions) {
         this.repository = repository;
-        this.extractor = extractor;
+        this.validator = validator;
+        this.storage = storage;
         this.songs = songs;
+        this.uploadTransaction = new TransactionTemplate(transactions);
+        this.uploadTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @Transactional
     public long upload(String contentType, byte[] data) {
         ResourceValidation.contentType(contentType);
-        SongMetadata metadata = extractor.extract(data);
-        ResourceEntity resource = repository.saveAndFlush(new ResourceEntity(data));
-        songs.create(metadata.withId(resource.id));
-        return resource.id;
+        validator.validate(data);
+        StoredResourceLocation location = storage.put("resources/" + UUID.randomUUID() + ".mp3", data);
+        try {
+            return Objects.requireNonNull(uploadTransaction.execute(status ->
+                    repository.saveAndFlush(new ResourceEntity(location.bucket(), location.key())).id));
+        } catch (RuntimeException ex) {
+            try {
+                storage.delete(location);
+            } catch (RuntimeException cleanupFailure) {
+                ex.addSuppressed(cleanupFailure);
+                log.error("Could not remove orphan resource {}/{}", location.bucket(), location.key(), cleanupFailure);
+            }
+            throw ex;
+        }
     }
 
     @Transactional(readOnly = true)
     public byte[] get(String rawId) {
         long id = ResourceValidation.id(rawId);
-        return repository.findById(id).orElseThrow(() -> new ResourceNotFoundException(id)).data;
+        ResourceEntity resource = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException(id));
+        return storage.get(new StoredResourceLocation(resource.storageBucket, resource.objectKey));
     }
 
     @Transactional
     public List<Long> delete(String rawIds) {
-        List<Long> deleted = new ArrayList<>();
-        for (long id : ResourceValidation.ids(rawIds)) {
-            if (repository.existsById(id) && !deleted.contains(id)) deleted.add(id);
+        List<Long> ids = List.copyOf(new LinkedHashSet<>(ResourceValidation.ids(rawIds)));
+        Map<Long, ResourceEntity> resources = repository.findAllById(ids).stream()
+                .collect(Collectors.toMap(resource -> resource.id, resource -> resource));
+        List<Long> deleted = ids.stream().filter(resources::containsKey).toList();
+        if (deleted.isEmpty()) return deleted;
+        for (long id : deleted) {
+            ResourceEntity resource = resources.get(id);
+            storage.delete(new StoredResourceLocation(resource.storageBucket, resource.objectKey));
         }
-        songs.delete(deleted);
         repository.deleteAllByIdInBatch(deleted);
+        repository.flush();
+        songs.delete(deleted);
         return deleted;
     }
 }
