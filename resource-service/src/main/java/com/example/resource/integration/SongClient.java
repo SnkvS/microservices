@@ -17,10 +17,6 @@ public class SongClient {
         client = songRestClientBuilder.baseUrl(url).build();
     }
 
-    public void create(SongMetadata metadata) {
-        client.post().uri("/songs").body(metadata).retrieve().toBodilessEntity();
-    }
-
     public void delete(List<Long> ids) {
         if (ids.isEmpty()) return;
         String csv = ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));

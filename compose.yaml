@@ -1,4 +1,21 @@
 services:
+  resource-processor:
+    build: ./resource-processor
+  localstack:
+    build: ./init-scripts/localstack
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    environment:
+      SERVICES: s3
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
+      RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
+      AWS_DEFAULT_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
+    healthcheck:
+      test: [ "CMD-SHELL", "awslocal s3api head-bucket --bucket \"$${RESOURCE_STORAGE_BUCKET}\" >/dev/null 2>&1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
   api-gateway:
     build: ./api-gateway
     ports:
@@ -77,6 +94,11 @@ services:
       RESOURCE_DB_USER: ${RESOURCE_DB_USER}
       RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD}
       SONG_SERVICE_URL: ${SONG_SERVICE_URL}
+      RESOURCE_STORAGE_ENDPOINT: ${RESOURCE_STORAGE_ENDPOINT:-http://localstack:4566}
+      RESOURCE_STORAGE_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
+      RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
       EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
     depends_on:
@@ -84,8 +106,8 @@ services:
         condition: service_healthy
       resource-db:
         condition: service_healthy
-      song-service:
-        condition: service_started
+      localstack:
+        condition: service_healthy
   song-service:
     build: ./song-service
     ports:
