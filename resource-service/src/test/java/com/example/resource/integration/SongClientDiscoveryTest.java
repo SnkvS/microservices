@@ -4,6 +4,14 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryListener;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
@@ -18,13 +26,15 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(classes = SongClientDiscoveryTest.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {"eureka.client.enabled=false", "spring.cloud.loadbalancer.cache.enabled=false",
-                "song.service.url=http://song-service"})
+                "song.service.url=http://song-service", "communication.http.initial-delay=1", "communication.http.max-delay=2"})
 class SongClientDiscoveryTest {
 
     private static final List<String> firstRequests = new CopyOnWriteArrayList<>();
@@ -37,6 +47,28 @@ class SongClientDiscoveryTest {
 
     @Autowired
     private SongClient songClient;
+
+    @Autowired @LoadBalanced RestClient.Builder builder;
+    @Autowired @Qualifier("songHttpRetry") RetryTemplate retry;
+
+    @Test
+    void missingDiscoveryInstanceIsRetriedAsATemporaryCommunicationFailure() {
+        AtomicInteger failures = new AtomicInteger();
+        RetryListener listener = new RetryListener() {
+            @Override
+            public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+                failures.incrementAndGet();
+            }
+        };
+        retry.registerListener(listener);
+        try {
+            SongClient unavailable = new SongClient(builder, "http://not-registered", retry);
+            assertThatThrownBy(() -> unavailable.delete(List.of(42L))).isInstanceOf(ResourceAccessException.class);
+            assertThat(failures).hasValue(3);
+        } finally {
+            retry.setListeners(new RetryListener[0]);
+        }
+    }
 
     @DynamicPropertySource
     static void discoveredInstances(DynamicPropertyRegistry properties) throws IOException {

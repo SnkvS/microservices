@@ -1,6 +1,8 @@
 package com.example.resource.service;
 
 import com.example.resource.integration.SongClient;
+import com.example.resource.messaging.ResourceUploadedPublisher;
+import com.example.resource.messaging.ResourcePublicationException;
 import com.example.resource.persistence.ResourceEntity;
 import com.example.resource.persistence.ResourceRepository;
 import com.example.resource.storage.ResourceStorage;
@@ -39,11 +41,13 @@ class ResourceServiceTest {
 
     private final SongClient songs = mock(SongClient.class);
 
+    private final ResourceUploadedPublisher publisher = mock(ResourceUploadedPublisher.class);
+
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
 
     private final StoredResourceLocation location = new StoredResourceLocation("resources", "resources/test.mp3");
 
-    private final ResourceService service = new ResourceService(repository, new Mp3FileValidator(), storage, songs, transactions);
+    private final ResourceService service = new ResourceService(repository, new Mp3FileValidator(), storage, songs, transactions, publisher);
 
     @BeforeEach
     void setup() {
@@ -67,6 +71,9 @@ class ResourceServiceTest {
         verify(repository).saveAndFlush(saved.capture());
         assertThat(saved.getValue().storageBucket).isEqualTo("resources");
         assertThat(saved.getValue().objectKey).isEqualTo("resources/test.mp3");
+        var order = inOrder(transactions, publisher);
+        order.verify(transactions).commit(any(TransactionStatus.class));
+        order.verify(publisher).publish(42L);
         verifyNoInteractions(songs);
     }
 
@@ -74,7 +81,7 @@ class ResourceServiceTest {
     void invalidUploadHasNoStorageDatabaseOrSongSideEffects() {
         assertThatThrownBy(() -> service.upload("text/plain", new byte[]{1})).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.upload("audio/mpeg", "invalid".getBytes())).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(storage, repository, songs, transactions);
+        verifyNoInteractions(storage, repository, songs, transactions, publisher);
     }
 
     @Test
@@ -85,6 +92,7 @@ class ResourceServiceTest {
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenThrow(failure);
         assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
         verify(storage).delete(location);
+        verifyNoInteractions(publisher);
         verifyNoInteractions(songs);
     }
 
@@ -101,6 +109,23 @@ class ResourceServiceTest {
         doThrow(failure).when(transactions).commit(any(TransactionStatus.class));
         assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
         verify(storage).delete(location);
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void publicationFailureRetainsCommittedResourceAndStorage() throws Exception {
+        byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
+        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
+        when(repository.saveAndFlush(any(ResourceEntity.class))).thenAnswer(call -> {
+            ResourceEntity resource = call.getArgument(0);
+            resource.id = 42L;
+            return resource;
+        });
+        var failure = new ResourcePublicationException(42, new IllegalStateException("offline"));
+        doThrow(failure).when(publisher).publish(42);
+        assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
+        verify(transactions).commit(any());
+        verify(storage, never()).delete(any());
     }
 
     @Test

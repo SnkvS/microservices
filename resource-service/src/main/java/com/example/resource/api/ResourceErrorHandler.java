@@ -1,6 +1,7 @@
 package com.example.resource.api;
 
 import com.example.resource.service.ResourceNotFoundException;
+import com.example.resource.messaging.ResourcePublicationException;
 import com.example.resource.storage.ResourceStorageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,12 @@ public class ResourceErrorHandler {
     ResponseEntity<Map<String, String>> storageFailure(ResourceStorageException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("errorMessage", "Resource storage request failed", "errorCode", "500"));
+    }
+
+    @ExceptionHandler(ResourcePublicationException.class)
+    ResponseEntity<Map<String, String>> publicationFailure(ResourcePublicationException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("errorMessage", "Resource notification failed", "errorCode", "503"));
     }
 
     @ExceptionHandler(Exception.class)
