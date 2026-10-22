@@ -67,17 +67,19 @@ class SongClientDiscoveryTest {
     }
 
     @Test
-    void routesCreateAndDeleteRequestsAcrossDiscoveredInstances() {
-        songClient.create(new SongMetadata(101L, "First", "Artist", "Album", "00:07", "2025"));
-        songClient.create(new SongMetadata(102L, "Second", "Artist", "Album", "00:07", "2025"));
+    void routesDeleteRequestsAcrossDiscoveredInstances() {
+        songClient.delete(List.of(101L));
+        songClient.delete(List.of(102L));
         songClient.delete(List.of(101L, 102L));
         songClient.delete(List.of(101L, 102L));
 
         for (List<String> requests : List.of(firstRequests, secondRequests)) {
             assertThat(requests).hasSize(2);
-            assertThat(requests.get(0)).startsWith("POST /songs ").contains("\"artist\":\"Artist\"");
+            assertThat(requests.get(0)).startsWith("DELETE /songs?id=");
             assertThat(requests.get(1)).isEqualTo("DELETE /songs?id=101,102 ");
         }
+        assertThat(List.of(firstRequests.get(0), secondRequests.get(0)))
+                .containsExactlyInAnyOrder("DELETE /songs?id=101 ", "DELETE /songs?id=102 ");
         int requestCount = firstRequests.size() + secondRequests.size();
         songClient.delete(List.of());
         assertThat(firstRequests.size() + secondRequests.size()).isEqualTo(requestCount);

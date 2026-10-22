@@ -1,6 +1,7 @@
 package com.example.resource.api;
 
 import com.example.resource.service.ResourceNotFoundException;
+import com.example.resource.storage.ResourceStorageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -28,6 +29,12 @@ public class ResourceErrorHandler {
     @ExceptionHandler(RestClientException.class)
     ResponseEntity<Map<String, String>> songFailure(RestClientException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("errorMessage", "Song Service request failed", "errorCode", "500"));
+    }
+
+    @ExceptionHandler(ResourceStorageException.class)
+    ResponseEntity<Map<String, String>> storageFailure(ResourceStorageException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("errorMessage", "Resource storage request failed", "errorCode", "500"));
     }
 
     @ExceptionHandler(Exception.class)
