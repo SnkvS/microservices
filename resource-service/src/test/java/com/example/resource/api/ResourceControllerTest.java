@@ -2,6 +2,7 @@ package com.example.resource.api;
 
 import com.example.resource.service.ResourceNotFoundException;
 import com.example.resource.service.ResourceService;
+import com.example.resource.messaging.ResourcePublicationException;
 import com.example.resource.storage.ResourceStorageException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,15 @@ class ResourceControllerTest {
         mvc.perform(get("/resources/42")).andExpect(status().isOk())
                 .andExpect(content().contentType("audio/mpeg"))
                 .andExpect(header().string("Content-Length", "4")).andExpect(content().bytes(bytes));
+    }
+
+    @Test
+    void publicationFailureIs503WithoutLeakingBrokerDetails() throws Exception {
+        when(service.upload(eq("audio/mpeg"), any())).thenThrow(
+                new ResourcePublicationException(42, new IllegalStateException("secret endpoint")));
+        mvc.perform(post("/resources").contentType("audio/mpeg").content(new byte[]{1}))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.errorCode").value("503"))
+                .andExpect(jsonPath("$.errorMessage").value("Resource notification failed"));
     }
 
     @Test

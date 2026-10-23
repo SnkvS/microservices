@@ -1,6 +1,7 @@
 package com.example.resource.service;
 
 import com.example.resource.integration.SongClient;
+import com.example.resource.messaging.ResourceUploadedPublisher;
 import com.example.resource.persistence.ResourceEntity;
 import com.example.resource.persistence.ResourceRepository;
 import com.example.resource.storage.ResourceStorage;
@@ -35,12 +36,15 @@ public class ResourceService {
 
     private final TransactionTemplate uploadTransaction;
 
+    private final ResourceUploadedPublisher publisher;
+
     public ResourceService(ResourceRepository repository, Mp3FileValidator validator, ResourceStorage storage,
-                           SongClient songs, PlatformTransactionManager transactions) {
+                           SongClient songs, PlatformTransactionManager transactions, ResourceUploadedPublisher publisher) {
         this.repository = repository;
         this.validator = validator;
         this.storage = storage;
         this.songs = songs;
+        this.publisher = publisher;
         this.uploadTransaction = new TransactionTemplate(transactions);
         this.uploadTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -49,8 +53,9 @@ public class ResourceService {
         ResourceValidation.contentType(contentType);
         validator.validate(data);
         StoredResourceLocation location = storage.put("resources/" + UUID.randomUUID() + ".mp3", data);
+        long resourceId;
         try {
-            return Objects.requireNonNull(uploadTransaction.execute(status ->
+            resourceId = Objects.requireNonNull(uploadTransaction.execute(status ->
                     repository.saveAndFlush(new ResourceEntity(location.bucket(), location.key())).id));
         } catch (RuntimeException ex) {
             try {
@@ -61,6 +66,8 @@ public class ResourceService {
             }
             throw ex;
         }
+        publisher.publish(resourceId);
+        return resourceId;
     }
 
     @Transactional(readOnly = true)

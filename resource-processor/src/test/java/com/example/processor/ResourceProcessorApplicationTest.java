@@ -13,7 +13,8 @@ class ResourceProcessorApplicationTest {
     @Test
     void startsWithoutAWebServerAndProvidesMetadataExtraction() {
         var application = new SpringApplication(ResourceProcessorApplication.class);
-        try (var context = application.run("--spring.main.keep-alive=false")) {
+        try (var context = application.run("--spring.main.keep-alive=false", "--eureka.client.enabled=false",
+                "--spring.rabbitmq.listener.simple.auto-startup=false")) {
             assertThat(application.getWebApplicationType()).isEqualTo(WebApplicationType.NONE);
             assertThat(context).isInstanceOf(AnnotationConfigApplicationContext.class);
             assertThat(context.getBean(Mp3MetadataExtractor.class)).isNotNull();

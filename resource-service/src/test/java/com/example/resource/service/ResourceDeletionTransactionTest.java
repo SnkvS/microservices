@@ -1,6 +1,7 @@
 package com.example.resource.service;
 
 import com.example.resource.integration.SongClient;
+import com.example.resource.messaging.ResourceUploadedPublisher;
 import com.example.resource.persistence.ResourceEntity;
 import com.example.resource.persistence.ResourceRepository;
 import com.example.resource.storage.ResourceStorage;
@@ -52,6 +53,9 @@ class ResourceDeletionTransactionTest {
 
     @MockitoBean
     SongClient songs;
+
+    @MockitoBean
+    ResourceUploadedPublisher publisher;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
