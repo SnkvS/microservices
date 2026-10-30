@@ -1,6 +1,9 @@
 package com.example.processor.integration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -10,6 +13,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
@@ -63,6 +67,27 @@ class ProcessorClientsTest {
         server.expect(requestTo("http://song-service/songs/42")).andRespond(withSuccess(JSON.replace("Test Title", "Other"), MediaType.APPLICATION_JSON));
         assertThatThrownBy(() -> songs.save(metadata)).isInstanceOf(IllegalStateException.class);
         server.verify();
+    }
+
+    @ParameterizedTest
+    @MethodSource("conflictingMetadata")
+    void conflictingMetadataInAnyFieldIsRejected(SongMetadata existing) throws Exception {
+        server.expect(requestTo("http://song-service/songs")).andExpect(content().json(JSON))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+        server.expect(requestTo("http://song-service/songs/42"))
+                .andRespond(withSuccess(new ObjectMapper().writeValueAsString(existing), MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> songs.save(metadata)).isInstanceOf(IllegalStateException.class);
+        server.verify();
+    }
+
+    static Stream<SongMetadata> conflictingMetadata() {
+        return Stream.of(
+                new SongMetadata(41L, "Test Title", "Test Artist", "Test Album", "00:07", "2025"),
+                new SongMetadata(42L, "Other Title", "Test Artist", "Test Album", "00:07", "2025"),
+                new SongMetadata(42L, "Test Title", "Other Artist", "Test Album", "00:07", "2025"),
+                new SongMetadata(42L, "Test Title", "Test Artist", "Other Album", "00:07", "2025"),
+                new SongMetadata(42L, "Test Title", "Test Artist", "Test Album", "00:08", "2025"),
+                new SongMetadata(42L, "Test Title", "Test Artist", "Test Album", "00:07", "2026"));
     }
 
     @Test
