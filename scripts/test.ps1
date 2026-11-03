@@ -14,10 +14,6 @@ function Invoke-Maven([string]$Module, [string[]]$Goals) {
     $runnerArgs = @('run', '--rm', '-v', "${repository}:/workspace",
         '-v', "${mavenCache}:/root/.m2/repository", '-v', '/var/run/docker.sock:/var/run/docker.sock',
         '-e', 'TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal', '-w', '/workspace')
-    $localEnvironment = Join-Path $repository '.env'
-    if (Test-Path -LiteralPath $localEnvironment) { $runnerArgs += @('--env-file', $localEnvironment) }
-    # Forward a token supplied in the calling shell without writing it to a file.
-    if ($env:LOCALSTACK_AUTH_TOKEN) { $runnerArgs += @('-e', 'LOCALSTACK_AUTH_TOKEN') }
     $runnerArgs += @('maven:3.9-eclipse-temurin-17-alpine', 'mvn', '-B', '-f', "$Module/pom.xml", 'clean')
     & docker @runnerArgs @Goals
     if ($LASTEXITCODE -ne 0) { throw "Maven failed for $Module ($Suite), exit $LASTEXITCODE" }

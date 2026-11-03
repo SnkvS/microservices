@@ -1,28 +1,63 @@
+# .env overrides these development defaults automatically. *_PORT values publish
+# fixed container ports on the host; local applications use localhost defaults.
+x-app-health: &app-health
+  interval: 5s
+  timeout: 5s
+  retries: 30
+  start_period: 30s
+
+x-discovery: &discovery
+  EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
+  EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS:-true}
+
+x-messaging: &messaging
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: ${RABBITMQ_USER:-resources}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-resources}
+
+x-http-retry: &http-retry
+  HTTP_MAX_ATTEMPTS: ${HTTP_MAX_ATTEMPTS:-3}
+  HTTP_INITIAL_DELAY: ${HTTP_INITIAL_DELAY:-1000}
+  HTTP_MAX_DELAY: ${HTTP_MAX_DELAY:-5000}
+  HTTP_CONNECT_TIMEOUT: ${HTTP_CONNECT_TIMEOUT:-2000}
+  HTTP_READ_TIMEOUT: ${HTTP_READ_TIMEOUT:-5000}
+
 services:
-  resource-processor:
-    build: ./resource-processor
+  resource-db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
     environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USER:-resources}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-resources}
-      RESOURCE_SERVICE_URL: http://resource-service
-      SONG_SERVICE_URL: ${SONG_SERVICE_URL:-http://song-service}
-      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
-      HTTP_MAX_ATTEMPTS: ${HTTP_MAX_ATTEMPTS:-3}
-      HTTP_INITIAL_DELAY: ${HTTP_INITIAL_DELAY:-1000}
-      HTTP_MAX_DELAY: ${HTTP_MAX_DELAY:-5000}
-      HTTP_CONNECT_TIMEOUT: ${HTTP_CONNECT_TIMEOUT:-2000}
-      HTTP_READ_TIMEOUT: ${HTTP_READ_TIMEOUT:-5000}
-      LISTENER_MAX_ATTEMPTS: ${LISTENER_MAX_ATTEMPTS:-5}
-      LISTENER_INITIAL_DELAY: ${LISTENER_INITIAL_DELAY:-1000}
-      LISTENER_MAX_DELAY: ${LISTENER_MAX_DELAY:-10000}
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+      POSTGRES_DB: ${RESOURCE_DB_NAME:-resources}
+      POSTGRES_USER: ${RESOURCE_DB_USER:-resources}
+      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD:-resources}
+    ports: [ "${RESOURCE_DB_PORT:-5432}:5432" ]
+    volumes: [ "./init-scripts/resource-db:/docker-entrypoint-initdb.d:ro" ]
+    tmpfs: [ /var/lib/postgresql/data ]
+    healthcheck:
+      test: [ CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"' ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  song-db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    environment:
+      POSTGRES_DB: ${SONG_DB_NAME:-songs}
+      POSTGRES_USER: ${SONG_DB_USER:-songs}
+      POSTGRES_PASSWORD: ${SONG_DB_PASSWORD:-songs}
+    ports: [ "${SONG_DB_PORT:-5433}:5432" ]
+    volumes: [ "./init-scripts/song-db:/docker-entrypoint-initdb.d:ro" ]
+    tmpfs: [ /var/lib/postgresql/data ]
+    healthcheck:
+      test: [ CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"' ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
   rabbitmq:
-    image: rabbitmq:4.1-management
+    image: ${RABBITMQ_IMAGE:-rabbitmq:4.1-management}
     hostname: rabbitmq
     ports:
       - "${RABBITMQ_AMQP_PORT:-5672}:5672"
@@ -30,151 +65,116 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-resources}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-resources}
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+    volumes: [ "rabbitmq-data:/var/lib/rabbitmq" ]
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      test: [ CMD, rabbitmq-diagnostics, -q, check_running ]
       interval: 5s
       timeout: 5s
       retries: 24
       start_period: 20s
+
   localstack:
-    build: ./init-scripts/localstack
-    ports:
-      - "${LOCALSTACK_PORT:-4566}:4566"
+    build:
+      context: ./init-scripts/localstack
+      args:
+        LOCALSTACK_IMAGE: ${LOCALSTACK_IMAGE:-localstack/localstack:4.14.0}
+    ports: [ "${LOCALSTACK_PORT:-4566}:4566" ]
     environment:
       SERVICES: s3
-      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
       RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
       AWS_DEFAULT_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
     healthcheck:
-      test: [ "CMD-SHELL", "awslocal s3api head-bucket --bucket \"$${RESOURCE_STORAGE_BUCKET}\" >/dev/null 2>&1" ]
+      test: [ CMD-SHELL, 'awslocal s3api head-bucket --bucket "$${RESOURCE_STORAGE_BUCKET}" >/dev/null 2>&1' ]
       interval: 5s
       timeout: 5s
       retries: 24
       start_period: 20s
-  api-gateway:
-    build: ./api-gateway
-    ports:
-      - "${GATEWAY_PORT:-8082}:8082"
-    environment:
-      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
-      EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health" ]
-      interval: 5s
-      timeout: 5s
-      retries: 24
-      start_period: 20s
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-      resource-service:
-        condition: service_started
-      song-service:
-        condition: service_started
+
   eureka-server:
     build: ./eureka-server
-    ports:
-      - "${EUREKA_SERVER_PORT}:8761"
+    ports: [ "${EUREKA_SERVER_PORT:-8761}:8761" ]
     environment:
-      EUREKA_SERVER_HOSTNAME: ${EUREKA_SERVER_HOSTNAME}
-      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
+      EUREKA_SERVER_HOSTNAME: ${EUREKA_SERVER_HOSTNAME:-eureka-server}
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8761/" ]
-      interval: 5s
-      timeout: 5s
-      retries: 24
-      start_period: 20s
-  resource-db:
-    image: postgres:16-alpine
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8761/actuator/health" ]
+
+  song-service:
+    build: ./song-service
+    ports: [ "${SONG_SERVICE_PORT:-8081}:8081" ]
     environment:
-      POSTGRES_DB: ${RESOURCE_DB_NAME}
-      POSTGRES_USER: ${RESOURCE_DB_USER}
-      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD}
-    ports:
-      - "${RESOURCE_DB_PORT}:5432"
-    volumes:
-      - ./init-scripts/resource-db:/docker-entrypoint-initdb.d:ro
-    tmpfs:
-      - /var/lib/postgresql/data
+      <<: *discovery
+      SONG_DB_URL: ${SONG_DB_URL:-jdbc:postgresql://song-db:5432/${SONG_DB_NAME:-songs}}
+      SONG_DB_USER: ${SONG_DB_USER:-songs}
+      SONG_DB_PASSWORD: ${SONG_DB_PASSWORD:-songs}
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
-  song-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${SONG_DB_NAME}
-      POSTGRES_USER: ${SONG_DB_USER}
-      POSTGRES_PASSWORD: ${SONG_DB_PASSWORD}
-    ports:
-      - "${SONG_DB_PORT}:5432"
-    volumes:
-      - ./init-scripts/song-db:/docker-entrypoint-initdb.d:ro
-    tmpfs:
-      - /var/lib/postgresql/data
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8081/actuator/health" ]
+    depends_on:
+      song-db: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+
   resource-service:
     build: ./resource-service
-    ports:
-      - "${RESOURCE_SERVICE_PORT}:8080"
+    ports: [ "${RESOURCE_SERVICE_PORT:-8080}:8080" ]
     environment:
-      RESOURCE_DB_URL: ${RESOURCE_DB_URL}
-      RESOURCE_DB_USER: ${RESOURCE_DB_USER}
-      RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD}
-      SONG_SERVICE_URL: ${SONG_SERVICE_URL}
+      <<: [ *discovery, *messaging, *http-retry ]
+      RESOURCE_DB_URL: ${RESOURCE_DB_URL:-jdbc:postgresql://resource-db:5432/${RESOURCE_DB_NAME:-resources}}
+      RESOURCE_DB_USER: ${RESOURCE_DB_USER:-resources}
+      RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:-resources}
+      SONG_SERVICE_URL: ${SONG_SERVICE_URL:-http://song-service}
       RESOURCE_STORAGE_ENDPOINT: ${RESOURCE_STORAGE_ENDPOINT:-http://localstack:4566}
       RESOURCE_STORAGE_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
       RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
-      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
-      EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USER:-resources}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-resources}
       PUBLISH_MAX_ATTEMPTS: ${PUBLISH_MAX_ATTEMPTS:-3}
       PUBLISH_INITIAL_DELAY: ${PUBLISH_INITIAL_DELAY:-1000}
       PUBLISH_MAX_DELAY: ${PUBLISH_MAX_DELAY:-5000}
       PUBLISH_CONFIRM_TIMEOUT: ${PUBLISH_CONFIRM_TIMEOUT:-5000}
-      HTTP_MAX_ATTEMPTS: ${HTTP_MAX_ATTEMPTS:-3}
-      HTTP_INITIAL_DELAY: ${HTTP_INITIAL_DELAY:-1000}
-      HTTP_MAX_DELAY: ${HTTP_MAX_DELAY:-5000}
-      HTTP_CONNECT_TIMEOUT: ${HTTP_CONNECT_TIMEOUT:-2000}
-      HTTP_READ_TIMEOUT: ${HTTP_READ_TIMEOUT:-5000}
+    healthcheck:
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health" ]
     depends_on:
-      eureka-server:
-        condition: service_healthy
-      resource-db:
-        condition: service_healthy
-      localstack:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-  song-service:
-    build: ./song-service
-    ports:
-      - "${SONG_SERVICE_PORT}"
+      resource-db: { condition: service_healthy }
+      localstack: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      song-service: { condition: service_healthy }
+
+  resource-processor:
+    build: ./resource-processor
+    ports: [ "${PROCESSOR_PORT:-8083}:8083" ]
     environment:
-      SONG_DB_URL: ${SONG_DB_URL}
-      SONG_DB_USER: ${SONG_DB_USER}
-      SONG_DB_PASSWORD: ${SONG_DB_PASSWORD}
-      SONG_SERVICE_PORT: ${SONG_SERVICE_PORT}
-      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL}
-      EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
+      <<: [ *discovery, *messaging, *http-retry ]
+      RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://resource-service}
+      SONG_SERVICE_URL: ${SONG_SERVICE_URL:-http://song-service}
+      LISTENER_MAX_ATTEMPTS: ${LISTENER_MAX_ATTEMPTS:-5}
+      LISTENER_INITIAL_DELAY: ${LISTENER_INITIAL_DELAY:-1000}
+      LISTENER_MAX_DELAY: ${LISTENER_MAX_DELAY:-10000}
+    healthcheck:
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8083/actuator/health" ]
     depends_on:
-      eureka-server:
-        condition: service_healthy
-      song-db:
-        condition: service_healthy
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      resource-service: { condition: service_healthy }
+      song-service: { condition: service_healthy }
+
+  api-gateway:
+    build: ./api-gateway
+    ports: [ "${GATEWAY_PORT:-8082}:8082" ]
+    environment:
+      <<: *discovery
+    healthcheck:
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health" ]
+    depends_on:
+      eureka-server: { condition: service_healthy }
+      resource-service: { condition: service_healthy }
+      song-service: { condition: service_healthy }
+      resource-processor: { condition: service_healthy }
 
 volumes:
   rabbitmq-data:

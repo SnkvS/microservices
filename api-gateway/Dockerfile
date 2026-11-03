@@ -1,9 +1,9 @@
 FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 COPY pom.xml ./pom.xml
-RUN mvn -B dependency:go-offline
+RUN --mount=type=cache,id=recording-maven,target=/root/.m2/repository,sharing=locked mvn -B dependency:go-offline
 COPY src ./src
-RUN mvn -B clean package
+RUN --mount=type=cache,id=recording-maven,target=/root/.m2/repository,sharing=locked mvn -B clean package
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
