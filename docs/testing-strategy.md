@@ -83,8 +83,8 @@ Prerequisites: Docker Desktop running Linux containers, PowerShell and network
 access for the first Maven/image downloads. The runner uses Maven with Java 17
 in Docker, compiles release-17 sources and caches dependencies in the user's
 local Maven repository. LocalStack uses the same pinned version as the existing
-application; supply its activation token through `LOCALSTACK_AUTH_TOKEN` in the
-calling shell or the existing local `.env`. Never commit the token.
+application (Community 4.14.0); no activation token is required. Automated test
+containers use their own configuration rather than loading the development `.env`.
 
 From the repository root:
 

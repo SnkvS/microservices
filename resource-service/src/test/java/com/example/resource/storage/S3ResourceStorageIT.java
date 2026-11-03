@@ -18,9 +18,8 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 @Testcontainers
 class S3ResourceStorageIT {
     @Container
-    static final LocalStackContainer LOCALSTACK = new LocalStackContainer(DockerImageName.parse("localstack/localstack:2026.08.0"))
-            .withServices(S3)
-            .withEnv("LOCALSTACK_AUTH_TOKEN", System.getenv().getOrDefault("LOCALSTACK_AUTH_TOKEN", ""));
+    static final LocalStackContainer LOCALSTACK = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.14.0"))
+            .withServices(S3);
 
     @Test
     void storesAndDownloadsExactBytesThenDeletesIdempotently() throws Exception {
