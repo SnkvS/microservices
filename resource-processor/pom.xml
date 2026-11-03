@@ -13,6 +13,8 @@
     <properties>
         <java.version>17</java.version>
         <spring-cloud.version>2025.0.3</spring-cloud.version>
+        <spring-cloud-contract.version>4.3.4</spring-cloud-contract.version>
+        <cucumber.version>7.23.0</cucumber.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -79,6 +81,34 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-spring</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-junit-platform-engine</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -86,6 +116,81 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration><excludes>
+                    <exclude>**/*IT.java</exclude>
+                    <exclude>**/contract/**</exclude>
+                    <exclude>**/*ComponentTest.java</exclude>
+                    <exclude>**/ResourceDeletionTransactionTest.java</exclude>
+                    <exclude>**/ResourceMessagingIntegrationTest.java</exclude>
+                </excludes></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions><execution><id>default</id><phase>none</phase></execution></executions>
+            </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>integration</id>
+            <build><plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <executions><execution><id>integration</id>
+                        <goals><goal>integration-test</goal><goal>verify</goal></goals>
+                        <configuration>
+                            <includes><include>**/*IT.java</include><include>**/ResourceMessagingIntegrationTest.java</include></includes>
+                            <failIfNoTests>true</failIfNoTests>
+                            <reportsDirectory>${project.build.directory}/integration-reports</reportsDirectory>
+                            <summaryFile>${project.build.directory}/integration-reports/failsafe-summary.xml</summaryFile>
+                        </configuration>
+                    </execution></executions>
+                </plugin>
+
+            </plugins></build>
+        </profile>
+        <profile>
+            <id>contracts</id>
+            <build><plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <executions><execution><id>contracts</id>
+                        <goals><goal>integration-test</goal><goal>verify</goal></goals>
+                        <configuration>
+                            <includes><include>**/contract/*Test.java</include><include>**/contract/**/*Test.java</include></includes>
+                            <failIfNoTests>true</failIfNoTests>
+                            <reportsDirectory>${project.build.directory}/contracts-reports</reportsDirectory>
+                            <summaryFile>${project.build.directory}/contracts-reports/failsafe-summary.xml</summaryFile>
+                        </configuration>
+                    </execution></executions>
+                </plugin>
+
+            </plugins></build>
+        </profile>
+        <profile>
+            <id>component</id>
+            <build><plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <executions><execution><id>component</id>
+                        <goals><goal>integration-test</goal><goal>verify</goal></goals>
+                        <configuration>
+                            <includes><include>**/*ComponentTest.java</include></includes>
+                            <failIfNoTests>true</failIfNoTests>
+                            <reportsDirectory>${project.build.directory}/component-reports</reportsDirectory>
+                            <summaryFile>${project.build.directory}/component-reports/failsafe-summary.xml</summaryFile>
+                        </configuration>
+                    </execution></executions>
+                </plugin>
+
+            </plugins></build>
+        </profile>
+    </profiles>
 </project>
