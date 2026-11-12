@@ -21,9 +21,6 @@ until every container is healthy, use `docker compose up -d --build --wait`.
 | Application | Default address | Health endpoint |
 | --- | --- | --- |
 | API Gateway | http://localhost:8082 | `/actuator/health` |
-| Resource Service | http://localhost:8080 | `/actuator/health` |
-| Song Service | http://localhost:8081 | `/actuator/health` |
-| Resource Processor | http://localhost:8083 | `/actuator/health` |
 | Eureka | http://localhost:8761 | `/actuator/health` |
 
 The Processor's HTTP server provides health reporting; MP3 processing still runs
@@ -32,6 +29,22 @@ checks verify application health, database/broker availability and the initializ
 S3 bucket. Dependent applications wait for healthy dependencies before starting.
 Eureka registration propagates asynchronously; the API tests wait for both Gateway
 routes before beginning the recording lifecycle.
+
+Use the Gateway for all business API requests: `/resources` and `/songs`. Backend
+application ports stay inside the Docker network. To run two Song instances:
+
+```powershell
+docker compose up -d --build --scale song-service=2
+```
+
+For single-instance debugging with backend host ports `8080`, `8081` and `8083`,
+select the development override explicitly. Omit it when scaling:
+
+```powershell
+docker compose -f compose.yaml -f compose.development.yaml up -d --build
+```
+
+Eureka's dashboard and infrastructure host ports remain available for development.
 
 PostgreSQL 17 Alpine loads the schemas from `init-scripts/*-db` through
 `/docker-entrypoint-initdb.d`. LocalStack enables only S3 and creates the bucket
@@ -82,6 +95,11 @@ the default Docker resource ports and credentials. If you deliberately customize
 resource ports or credentials, pass the corresponding environment variables to
 your local Java processes too.
 
+If this Windows host reports Java NIO `Unable to establish loopback connection`,
+use the process-local JVM workaround described in
+[Module 5 verification](docs/module-5-verification.md). The automated local runner
+accepts it through `-JavaOptions`.
+
 ## Verify the application
 
 ```powershell
@@ -101,3 +119,20 @@ mvn -f e2e-tests/pom.xml -Pe2e -De2e.base-url=http://localhost:8082 verify
 ```
 
 See [testing strategy](docs/testing-strategy.md) for coverage and report locations.
+
+## Verify Module 5 service discovery
+
+```powershell
+./scripts/verify-module-5.ps1 -Mode Docker
+./scripts/verify-module-5.ps1 -Mode Local
+```
+
+These PowerShell 7 commands own separate disposable Docker projects. Docker mode
+checks two real Song instances, request distribution, Eureka registration, Gateway
+errors and recovery. Local mode starts the Java applications on available host
+ports against isolated Docker infrastructure. Both run the existing Cucumber E2E
+suite through the Gateway and clean up their own resources. Local mode also
+requires Java on PATH. Reports and local application logs are saved under
+`output/module-5/<project>/`.
+
+See [Module 5 verification](docs/module-5-verification.md) for actual results.
