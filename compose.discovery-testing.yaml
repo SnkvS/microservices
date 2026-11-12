@@ -1,0 +1,10 @@
+# Layer over compose.testing.yaml for Module 5; no fixed host ports.
+services:
+  eureka-server:
+    ports: [ "127.0.0.1::8761" ]
+  song-service:
+    environment:
+      SERVER_TOMCAT_ACCESSLOG_ENABLED: "true"
+      SERVER_TOMCAT_ACCESSLOG_DIRECTORY: /tmp/access-logs
+      SERVER_TOMCAT_ACCESSLOG_PATTERN: "%r %s"
+      SERVER_TOMCAT_ACCESSLOG_BUFFERED: "false"

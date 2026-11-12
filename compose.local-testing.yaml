@@ -1,0 +1,10 @@
+# Only infrastructure is started from this override for local Java verification.
+services:
+  resource-db:
+    ports: [ "127.0.0.1::5432" ]
+  song-db:
+    ports: [ "127.0.0.1::5432" ]
+  rabbitmq:
+    ports: [ "127.0.0.1::5672" ]
+  localstack:
+    ports: [ "127.0.0.1::4566" ]

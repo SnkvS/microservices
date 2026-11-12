@@ -102,7 +102,6 @@ services:
 
   song-service:
     build: ./song-service
-    ports: [ "${SONG_SERVICE_PORT:-8081}:8081" ]
     environment:
       <<: *discovery
       SONG_DB_URL: ${SONG_DB_URL:-jdbc:postgresql://song-db:5432/${SONG_DB_NAME:-songs}}
@@ -117,7 +116,6 @@ services:
 
   resource-service:
     build: ./resource-service
-    ports: [ "${RESOURCE_SERVICE_PORT:-8080}:8080" ]
     environment:
       <<: [ *discovery, *messaging, *http-retry ]
       RESOURCE_DB_URL: ${RESOURCE_DB_URL:-jdbc:postgresql://resource-db:5432/${RESOURCE_DB_NAME:-resources}}
@@ -145,7 +143,6 @@ services:
 
   resource-processor:
     build: ./resource-processor
-    ports: [ "${PROCESSOR_PORT:-8083}:8083" ]
     environment:
       <<: [ *discovery, *messaging, *http-retry ]
       RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://resource-service}
@@ -167,6 +164,8 @@ services:
     ports: [ "${GATEWAY_PORT:-8082}:8082" ]
     environment:
       <<: *discovery
+      GATEWAY_CONNECT_TIMEOUT: ${GATEWAY_CONNECT_TIMEOUT:-2000}
+      GATEWAY_RESPONSE_TIMEOUT: ${GATEWAY_RESPONSE_TIMEOUT:-10s}
     healthcheck:
       <<: *app-health
       test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health" ]
