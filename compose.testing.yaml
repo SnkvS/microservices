@@ -1,22 +1,22 @@
 # Standalone, disposable stack. Only the gateway is published, on a random port.
 services:
   resource-db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment: { POSTGRES_DB: resources, POSTGRES_USER: resources, POSTGRES_PASSWORD: resources }
     volumes: [ "./init-scripts/resource-db:/docker-entrypoint-initdb.d:ro" ]
     tmpfs: [ /var/lib/postgresql/data ]
     healthcheck:
-      test: [ CMD-SHELL, "pg_isready -U resources -d resources" ]
+      test: [ CMD-SHELL, "pg_isready -h 127.0.0.1 -U resources -d resources" ]
       interval: 2s
       timeout: 3s
       retries: 30
   song-db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment: { POSTGRES_DB: songs, POSTGRES_USER: songs, POSTGRES_PASSWORD: songs }
     volumes: [ "./init-scripts/song-db:/docker-entrypoint-initdb.d:ro" ]
     tmpfs: [ /var/lib/postgresql/data ]
     healthcheck:
-      test: [ CMD-SHELL, "pg_isready -U songs -d songs" ]
+      test: [ CMD-SHELL, "pg_isready -h 127.0.0.1 -U songs -d songs" ]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -24,7 +24,7 @@ services:
     image: rabbitmq:4.1-management
     environment: { RABBITMQ_DEFAULT_USER: resources, RABBITMQ_DEFAULT_PASS: resources }
     healthcheck:
-      test: [ CMD, rabbitmq-diagnostics, -q, ping ]
+      test: [ CMD, rabbitmq-diagnostics, -q, check_running ]
       interval: 3s
       timeout: 5s
       retries: 30
@@ -32,7 +32,6 @@ services:
     build: ./init-scripts/localstack
     environment:
       SERVICES: s3
-      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
       RESOURCE_STORAGE_BUCKET: resources
       AWS_DEFAULT_REGION: us-east-1
     healthcheck:
@@ -46,7 +45,7 @@ services:
       EUREKA_SERVER_HOSTNAME: eureka-server
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
     healthcheck:
-      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8761/" ]
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8761/actuator/health" ]
       interval: 3s
       timeout: 5s
       retries: 40
@@ -64,11 +63,18 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: resources
       RABBITMQ_PASSWORD: resources
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     depends_on:
       resource-db: { condition: service_healthy }
       localstack: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       eureka-server: { condition: service_healthy }
+      song-service: { condition: service_healthy }
   song-service:
     build: ./song-service
     environment:
@@ -78,6 +84,12 @@ services:
       SONG_SERVICE_PORT: "8081"
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       EUREKA_PREFER_IP_ADDRESS: "true"
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8081/actuator/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     depends_on:
       song-db: { condition: service_healthy }
       eureka-server: { condition: service_healthy }
@@ -90,16 +102,31 @@ services:
       RESOURCE_SERVICE_URL: http://resource-service
       SONG_SERVICE_URL: http://song-service
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8083/actuator/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     depends_on:
       rabbitmq: { condition: service_healthy }
       eureka-server: { condition: service_healthy }
+      resource-service: { condition: service_healthy }
+      song-service: { condition: service_healthy }
   api-gateway:
     build: ./api-gateway
     ports: [ "127.0.0.1::8082" ]
     environment:
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       EUREKA_PREFER_IP_ADDRESS: "true"
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
     depends_on:
       eureka-server: { condition: service_healthy }
-      resource-service: { condition: service_started }
-      song-service: { condition: service_started }
+      resource-service: { condition: service_healthy }
+      song-service: { condition: service_healthy }
+      resource-processor: { condition: service_healthy }

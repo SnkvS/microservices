@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class ResourceDeletionTransactionTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
             .withInitScript("database/init.sql");
 
     @Autowired
