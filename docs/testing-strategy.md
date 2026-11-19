@@ -129,3 +129,9 @@ failures and skipped tests do not satisfy the assignment's execution requirement
 Completion requires at least one created and passed test in every category,
 plus a green run of the existing suites. Actual results are recorded separately
 in `docs/module-3-test-results.md` after execution.
+
+## Module 6 additions
+
+Storage has validation/controller tests, real PostgreSQL persistence/bootstrap tests, and generated HTTP contracts consumed by Resource. Resource adds breaker HTTP failure/state tests, real PostgreSQL/LocalStack promotion rollback/recovery/locking tests, and real RabbitMQ retry/DLQ tests. Processor adds confirmed-completion publisher/order tests and generated completion-message contracts consumed by Resource. Component scenarios assert actual completion messages, including duplicate metadata processing and deleted-resource skips.
+
+E2E adds Storage CRUD/CSV boundaries. scripts/verify-module-6.ps1 supplies DB/S3 lifecycle evidence and actual stop/restart/cold-start fallback checks in Docker/local modes; metadata appearing alone is not proof of promotion. scripts/test.ps1 generates both message providers before consumer verification to avoid the bidirectional contract build cycle. Final counts come from current XML reports.

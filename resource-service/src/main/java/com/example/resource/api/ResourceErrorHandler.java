@@ -27,6 +27,11 @@ public class ResourceErrorHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("errorMessage", ex.getMessage(), "errorCode", "404"));
     }
 
+    @ExceptionHandler(com.example.resource.integration.StorageCatalogException.class)
+    ResponseEntity<Map<String,String>> catalogFailure(Exception ex) {
+        return ResponseEntity.internalServerError().body(Map.of("errorMessage","Storage configuration is invalid","errorCode","500"));
+    }
+
     @ExceptionHandler(RestClientException.class)
     ResponseEntity<Map<String, String>> songFailure(RestClientException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("errorMessage", "Song Service request failed", "errorCode", "500"));

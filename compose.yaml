@@ -1,3 +1,9 @@
+x-storage-locations: &storage-locations
+  STAGING_STORAGE_BUCKET: ${STAGING_STORAGE_BUCKET:-resources-staging}
+  STAGING_STORAGE_PATH: ${STAGING_STORAGE_PATH:-/files}
+  PERMANENT_STORAGE_BUCKET: ${PERMANENT_STORAGE_BUCKET:-resources-permanent}
+  PERMANENT_STORAGE_PATH: ${PERMANENT_STORAGE_PATH:-/files}
+
 # .env overrides these development defaults automatically. *_PORT values publish
 # fixed container ports on the host; local applications use localhost defaults.
 x-app-health: &app-health
@@ -40,6 +46,23 @@ services:
       retries: 12
       start_period: 10s
 
+  storage-db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    environment:
+      POSTGRES_DB: ${STORAGE_DB_NAME:-storages}
+      POSTGRES_USER: ${STORAGE_DB_USER:-storages}
+      POSTGRES_PASSWORD: ${STORAGE_DB_PASSWORD:-storages}
+    ports: [ "${STORAGE_DB_PORT:-5434}:5432" ]
+    volumes: [ "./init-scripts/storage-db:/docker-entrypoint-initdb.d:ro" ]
+    tmpfs: [ /var/lib/postgresql/data ]
+    healthcheck:
+      test: [ CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"' ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+
   song-db:
     image: ${POSTGRES_IMAGE:-postgres:17-alpine}
     environment:
@@ -80,11 +103,12 @@ services:
         LOCALSTACK_IMAGE: ${LOCALSTACK_IMAGE:-localstack/localstack:4.14.0}
     ports: [ "${LOCALSTACK_PORT:-4566}:4566" ]
     environment:
+      <<: *storage-locations
       SERVICES: s3
       RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
       AWS_DEFAULT_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
     healthcheck:
-      test: [ CMD-SHELL, 'awslocal s3api head-bucket --bucket "$${RESOURCE_STORAGE_BUCKET}" >/dev/null 2>&1' ]
+      test: [ CMD-SHELL, 'awslocal s3api head-bucket --bucket "$$RESOURCE_STORAGE_BUCKET" >/dev/null 2>&1 && awslocal s3api head-bucket --bucket "$$STAGING_STORAGE_BUCKET" >/dev/null 2>&1 && awslocal s3api head-bucket --bucket "$$PERMANENT_STORAGE_BUCKET" >/dev/null 2>&1' ]
       interval: 5s
       timeout: 5s
       retries: 24
@@ -99,6 +123,21 @@ services:
     healthcheck:
       <<: *app-health
       test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8761/actuator/health" ]
+
+  storage-service:
+    build: ./storage-service
+    environment:
+      <<: [ *discovery, *storage-locations ]
+      STORAGE_DB_URL: ${STORAGE_DB_URL:-jdbc:postgresql://storage-db:5432/${STORAGE_DB_NAME:-storages}}
+      STORAGE_DB_USER: ${STORAGE_DB_USER:-storages}
+      STORAGE_DB_PASSWORD: ${STORAGE_DB_PASSWORD:-storages}
+    healthcheck:
+      <<: *app-health
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8084/actuator/health" ]
+    depends_on:
+      storage-db: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+
 
   song-service:
     build: ./song-service
@@ -117,14 +156,13 @@ services:
   resource-service:
     build: ./resource-service
     environment:
-      <<: [ *discovery, *messaging, *http-retry ]
+      <<: [ *discovery, *messaging, *http-retry, *storage-locations ]
       RESOURCE_DB_URL: ${RESOURCE_DB_URL:-jdbc:postgresql://resource-db:5432/${RESOURCE_DB_NAME:-resources}}
       RESOURCE_DB_USER: ${RESOURCE_DB_USER:-resources}
       RESOURCE_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:-resources}
       SONG_SERVICE_URL: ${SONG_SERVICE_URL:-http://song-service}
       RESOURCE_STORAGE_ENDPOINT: ${RESOURCE_STORAGE_ENDPOINT:-http://localstack:4566}
       RESOURCE_STORAGE_REGION: ${RESOURCE_STORAGE_REGION:-us-east-1}
-      RESOURCE_STORAGE_BUCKET: ${RESOURCE_STORAGE_BUCKET:-resources}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       PUBLISH_MAX_ATTEMPTS: ${PUBLISH_MAX_ATTEMPTS:-3}

@@ -36,6 +36,9 @@ class GatewayRoutingTest {
     private static HttpServer secondSong;
 
     private static HttpServer resource;
+    private static HttpServer storage;
+    private static final List<String> storageRequests=new CopyOnWriteArrayList<>();
+    private static final List<String> storageBodies=new CopyOnWriteArrayList<>();
 
     @Autowired
     private WebTestClient client;
@@ -70,6 +73,16 @@ class GatewayRoutingTest {
             exchange.close();
         });
         resource.start();
+        storage=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        storage.createContext("/storages",exchange->{
+            storageRequests.add(exchange.getRequestMethod()+" "+exchange.getRequestURI());
+            storageBodies.add(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
+            byte[] response=(exchange.getRequestMethod().equals("POST") ? "{\"id\":3}" : "[3]").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type","application/json");
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        storage.start();
+        properties.add("spring.cloud.discovery.client.simple.instances.storage-service[0].uri",()->address(storage));
         properties.add("spring.cloud.discovery.client.simple.instances.song-service[0].uri",
                 () -> address(firstSong));
         properties.add("spring.cloud.discovery.client.simple.instances.song-service[1].uri",
@@ -101,9 +114,21 @@ class GatewayRoutingTest {
 
     @AfterAll
     static void stopServers() {
-        for (HttpServer server : new HttpServer[]{firstSong, secondSong, resource}) {
+        for (HttpServer server : new HttpServer[]{firstSong, secondSong, resource,storage}) {
             if (server != null) server.stop(0);
         }
+    }
+
+    @Test
+    void forwardsStorageMethodsBodyAndCsvWithoutChangingArrayResponse() {
+        storageRequests.clear(); storageBodies.clear();
+        String body="{\"storageType\":\"STAGING\",\"bucket\":\"custom-bucket\",\"path\":\"/files\"}";
+        client.post().uri("/storages").contentType(MediaType.APPLICATION_JSON).bodyValue(body)
+                .exchange().expectStatus().isOk().expectBody().json("{\"id\":3}");
+        client.get().uri("/storages").exchange().expectStatus().isOk().expectBody().json("[3]");
+        client.delete().uri("/storages?id=3,99").exchange().expectStatus().isOk().expectBody().json("[3]");
+        assertThat(storageRequests).containsExactly("POST /storages","GET /storages","DELETE /storages?id=3,99");
+        assertThat(storageBodies.get(0)).isEqualTo(body);
     }
 
     @Test

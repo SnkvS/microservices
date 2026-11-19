@@ -30,7 +30,7 @@ public class ResourceStorageConfiguration {
     }
 
     @Bean
-    ResourceStorage resourceStorage(S3Client resourceS3Client, @Value("${resource.storage.bucket}") String bucket) {
-        return new S3ResourceStorage(resourceS3Client, bucket);
+    ResourceStorage resourceStorage(S3Client resourceS3Client) {
+        return new S3ResourceStorage(resourceS3Client);
     }
 }

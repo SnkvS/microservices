@@ -37,14 +37,16 @@ public class ResourceService {
     private final TransactionTemplate uploadTransaction;
 
     private final ResourceUploadedPublisher publisher;
+    private final com.example.resource.integration.StorageCatalogClient catalog;
 
     public ResourceService(ResourceRepository repository, Mp3FileValidator validator, ResourceStorage storage,
-                           SongClient songs, PlatformTransactionManager transactions, ResourceUploadedPublisher publisher) {
+                           SongClient songs, PlatformTransactionManager transactions, ResourceUploadedPublisher publisher, com.example.resource.integration.StorageCatalogClient catalog) {
         this.repository = repository;
         this.validator = validator;
         this.storage = storage;
         this.songs = songs;
         this.publisher = publisher;
+        this.catalog = catalog;
         this.uploadTransaction = new TransactionTemplate(transactions);
         this.uploadTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -52,7 +54,9 @@ public class ResourceService {
     public long upload(String contentType, byte[] data) {
         ResourceValidation.contentType(contentType);
         validator.validate(data);
-        StoredResourceLocation location = storage.put("resources/" + UUID.randomUUID() + ".mp3", data);
+        StoredResourceLocation location = catalog.select(com.example.resource.integration.StorageType.STAGING)
+                .locationFor(UUID.randomUUID() + ".mp3");
+        storage.put(location,data);
         long resourceId;
         try {
             resourceId = Objects.requireNonNull(uploadTransaction.execute(status ->
@@ -70,23 +74,27 @@ public class ResourceService {
         return resourceId;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] get(String rawId) {
         long id = ResourceValidation.id(rawId);
-        ResourceEntity resource = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException(id));
+        ResourceEntity resource = repository.findForRead(id).orElseThrow(() -> new ResourceNotFoundException(id));
         return storage.get(new StoredResourceLocation(resource.storageBucket, resource.objectKey));
     }
 
     @Transactional
     public List<Long> delete(String rawIds) {
         List<Long> ids = List.copyOf(new LinkedHashSet<>(ResourceValidation.ids(rawIds)));
-        Map<Long, ResourceEntity> resources = repository.findAllById(ids).stream()
+        Map<Long, ResourceEntity> resources = repository.findAllForUpdate(ids).stream()
                 .collect(Collectors.toMap(resource -> resource.id, resource -> resource));
         List<Long> deleted = ids.stream().filter(resources::containsKey).toList();
         if (deleted.isEmpty()) return deleted;
         for (long id : deleted) {
             ResourceEntity resource = resources.get(id);
-            storage.delete(new StoredResourceLocation(resource.storageBucket, resource.objectKey));
+            var locations=new LinkedHashSet<StoredResourceLocation>();
+            locations.add(new StoredResourceLocation(resource.storageBucket,resource.objectKey));
+            if (resource.promotionTargetBucket!=null) locations.add(new StoredResourceLocation(resource.promotionTargetBucket,resource.promotionTargetKey));
+            if (resource.cleanupSourceBucket!=null) locations.add(new StoredResourceLocation(resource.cleanupSourceBucket,resource.cleanupSourceKey));
+            locations.forEach(storage::delete);
         }
         repository.deleteAllByIdInBatch(deleted);
         repository.flush();

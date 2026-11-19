@@ -68,6 +68,47 @@ class ResourceMessagingIntegrationTest {
     }
 
     @Test
+    void completionPublicationFailureRetriesMetadataAndHoldsAcknowledgementUntilSuccess() throws Exception {
+        var resources=mock(com.example.processor.integration.ResourceClient.class);
+        var songs=mock(com.example.processor.integration.SongClient.class);
+        var publisher=mock(ResourceProcessedPublisher.class);
+        var processing=new ResourceProcessingService(resources,new com.example.processor.metadata.Mp3MetadataExtractor(),songs,publisher);
+        try(var input=getClass().getResourceAsStream("/mp3/valid.mp3")) { when(resources.download(47)).thenReturn(input.readAllBytes()); }
+        var waiting=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var attempts=new AtomicInteger();
+        doAnswer(call->{
+            if(attempts.incrementAndGet()==1)
+                throw new ResourceProcessedPublicationException(47,new org.springframework.amqp.AmqpException("completion unavailable"));
+            waiting.countDown();
+            if(!release.await(30,java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("Publication was not released");
+            return null;
+        }).when(publisher).publish(47);
+        doAnswer(call->{processing.process(47);return null;}).when(service).process(47);
+        try {
+            send("{\"resourceId\":47}");
+            assertThat(waiting.await(15,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            await().atMost(Duration.ofSeconds(20)).untilAsserted(()->
+                    assertThat(processingQueue().path("messages_unacknowledged").asInt()).isEqualTo(1));
+            release.countDown();
+            await().atMost(Duration.ofSeconds(15)).untilAsserted(()->{
+                assertThat(processingQueue().path("messages_unacknowledged").asInt()).isZero();
+                verify(publisher,times(2)).publish(47);
+            });
+            verify(songs,times(2)).save(new com.example.processor.integration.SongMetadata(47L,
+                    "Test Title","Test Artist","Test Album","00:07","2025"));
+            assertThat(rabbit.receive("resource.processing.dlq",300)).isNull();
+        } finally { release.countDown(); }
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode processingQueue() {
+        String url="http://"+RABBIT.getHost()+":"+RABBIT.getHttpPort()+"/api/queues/%2F/resource.processing";
+        return org.springframework.web.client.RestClient.builder()
+                .defaultHeaders(h->h.setBasicAuth(RABBIT.getAdminUsername(),RABBIT.getAdminPassword()))
+                .build().get().uri(java.net.URI.create(url)).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+    }
+
+    @Test
     void exhaustedTransientFailureReachesDeadLetterQueueWithOriginalBody() {
         doThrow(new ResourceAccessException("offline")).when(service).process(43);
         send("{\"resourceId\":43}");

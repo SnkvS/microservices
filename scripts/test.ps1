@@ -20,7 +20,10 @@ function Invoke-Maven([string]$Module, [string[]]$Goals) {
 }
 
 function Install-Contracts {
+    Invoke-Maven 'storage-service' @('-Pcontracts', 'install')
     Invoke-Maven 'song-service' @('-Pcontracts', 'install')
+    Invoke-Maven 'resource-service' @('-Pcontracts', '-Dit.test=HttpTest,MessagingTest', 'install')
+    Invoke-Maven 'resource-processor' @('-Pcontracts', '-Dit.test=MessagingTest', 'install')
     Invoke-Maven 'resource-service' @('-Pcontracts', 'install')
 }
 
@@ -28,19 +31,22 @@ Push-Location $repository
 try {
     switch ($Suite) {
         'All' {
+            Invoke-Maven 'storage-service' @('-Pintegration,contracts', 'install')
             Invoke-Maven 'song-service' @('-Pintegration,contracts', 'install')
+            Invoke-Maven 'resource-service' @('-Pcontracts', '-Dit.test=HttpTest,MessagingTest', 'install')
+            Invoke-Maven 'resource-processor' @('-Pcontracts', '-Dit.test=MessagingTest', 'install')
             Invoke-Maven 'resource-service' @('-Pintegration,contracts', 'install')
             Invoke-Maven 'resource-processor' @('-Pintegration,contracts,component', 'verify')
             Invoke-Maven 'api-gateway' @('test')
             Invoke-Maven 'eureka-server' @('test')
         }
         'Unit' {
-            foreach ($module in @('song-service', 'resource-service', 'resource-processor', 'api-gateway')) {
+            foreach ($module in @('storage-service', 'song-service', 'resource-service', 'resource-processor', 'api-gateway')) {
                 Invoke-Maven $module @('test')
             }
         }
         'Integration' {
-            foreach ($module in @('song-service', 'resource-service', 'resource-processor')) {
+            foreach ($module in @('storage-service', 'song-service', 'resource-service', 'resource-processor')) {
                 Invoke-Maven $module @('-Pintegration', 'verify')
             }
         }

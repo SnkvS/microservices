@@ -47,17 +47,20 @@ class ResourceServiceTest {
 
     private final StoredResourceLocation location = new StoredResourceLocation("resources", "resources/test.mp3");
 
-    private final ResourceService service = new ResourceService(repository, new Mp3FileValidator(), storage, songs, transactions, publisher);
+    private final com.example.resource.integration.StorageCatalogClient catalog = mock(com.example.resource.integration.StorageCatalogClient.class);
+    private final com.example.resource.integration.StorageDefinition definition = mock(com.example.resource.integration.StorageDefinition.class);
+    private final ResourceService service = new ResourceService(repository, new Mp3FileValidator(), storage, songs, transactions, publisher, catalog);
 
     @BeforeEach
     void setup() {
+        when(catalog.select(com.example.resource.integration.StorageType.STAGING)).thenReturn(definition);
+        when(definition.locationFor(anyString())).thenReturn(location);
         when(transactions.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
     }
 
     @Test
     void uploadStoresOriginalBytesAndLocationWithoutCallingSongService() throws Exception {
         byte[] bytes = Mp3FileValidatorTest.fixture("missing-tags.mp3");
-        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenAnswer(call -> {
             ResourceEntity resource = call.getArgument(0);
             resource.id = 42L;
@@ -65,13 +68,14 @@ class ResourceServiceTest {
         });
         assertThat(service.upload("audio/mpeg", bytes)).isEqualTo(42);
         var key = ArgumentCaptor.forClass(String.class);
-        verify(storage).put(key.capture(), eq(bytes));
-        assertThat(key.getValue()).matches("resources/[0-9a-f-]{36}\\.mp3");
+        verify(definition).locationFor(key.capture());
+        verify(storage).put(eq(location),eq(bytes));
+        assertThat(key.getValue()).matches("[0-9a-f-]{36}\\.mp3");
         var saved = ArgumentCaptor.forClass(ResourceEntity.class);
         verify(repository).saveAndFlush(saved.capture());
         assertThat(saved.getValue().storageBucket).isEqualTo("resources");
         assertThat(saved.getValue().objectKey).isEqualTo("resources/test.mp3");
-        var order = inOrder(transactions, publisher);
+        var order = inOrder(transactions, publisher, catalog);
         order.verify(transactions).commit(any(TransactionStatus.class));
         order.verify(publisher).publish(42L);
         verifyNoInteractions(songs);
@@ -81,14 +85,13 @@ class ResourceServiceTest {
     void invalidUploadHasNoStorageDatabaseOrSongSideEffects() {
         assertThatThrownBy(() -> service.upload("text/plain", new byte[]{1})).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.upload("audio/mpeg", "invalid".getBytes())).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(storage, repository, songs, transactions, publisher);
+        verifyNoInteractions(storage, repository, songs, transactions, publisher, catalog);
     }
 
     @Test
     void removesStoredObjectWhenDatabaseSaveFails() throws Exception {
         byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
         var failure = new IllegalStateException("Database unavailable");
-        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenThrow(failure);
         assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
         verify(storage).delete(location);
@@ -100,7 +103,6 @@ class ResourceServiceTest {
     void removesStoredObjectWhenDatabaseCommitFails() throws Exception {
         byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
         var failure = new IllegalStateException("Commit failed");
-        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenAnswer(call -> {
             ResourceEntity resource = call.getArgument(0);
             resource.id = 42L;
@@ -115,7 +117,6 @@ class ResourceServiceTest {
     @Test
     void publicationFailureRetainsCommittedResourceAndStorage() throws Exception {
         byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
-        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenAnswer(call -> {
             ResourceEntity resource = call.getArgument(0);
             resource.id = 42L;
@@ -133,7 +134,6 @@ class ResourceServiceTest {
         byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
         var failure = new IllegalStateException("Save failed");
         var cleanup = new ResourceStorageException("deletion", new IllegalStateException("Offline"));
-        when(storage.put(anyString(), eq(bytes))).thenReturn(location);
         when(repository.saveAndFlush(any(ResourceEntity.class))).thenThrow(failure);
         doThrow(cleanup).when(storage).delete(location);
         assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
@@ -144,14 +144,14 @@ class ResourceServiceTest {
     void failedObjectUploadDoesNotCreateADatabaseRecord() throws Exception {
         byte[] bytes = Mp3FileValidatorTest.fixture("valid.mp3");
         var failure = new ResourceStorageException("upload", new IllegalStateException("Offline"));
-        when(storage.put(anyString(), eq(bytes))).thenThrow(failure);
+        doThrow(failure).when(storage).put(eq(location),eq(bytes));
         assertThatThrownBy(() -> service.upload("audio/mpeg", bytes)).isSameAs(failure);
         verifyNoInteractions(repository, songs, transactions);
     }
 
     @Test
     void downloadUsesPersistedLocationAndReturnsExactBytes() {
-        when(repository.findById(42L)).thenReturn(Optional.of(resource(42L)));
+        when(repository.findForRead(42L)).thenReturn(Optional.of(resource(42L)));
         byte[] bytes = {0, (byte) 255, 42};
         when(storage.get(location)).thenReturn(bytes);
         assertThat(service.get("42")).isEqualTo(bytes);
@@ -160,10 +160,10 @@ class ResourceServiceTest {
 
     @Test
     void distinguishesUnknownResourceFromAMissingStorageObject() {
-        when(repository.findById(42L)).thenReturn(Optional.empty());
+        when(repository.findForRead(42L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get("42")).isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(storage);
-        when(repository.findById(42L)).thenReturn(Optional.of(resource(42L)));
+        when(repository.findForRead(42L)).thenReturn(Optional.of(resource(42L)));
         var failure = new ResourceStorageException("download", new IllegalStateException("NoSuchKey"));
         when(storage.get(location)).thenThrow(failure);
         assertThatThrownBy(() -> service.get("42")).isSameAs(failure);
@@ -171,10 +171,10 @@ class ResourceServiceTest {
 
     @Test
     void deletionIgnoresDuplicatesAndUnknownIdsAndCleansUpInOrder() {
-        when(repository.findAllById(List.of(42L, 99L))).thenReturn(List.of(resource(42L)));
+        when(repository.findAllForUpdate(List.of(42L, 99L))).thenReturn(List.of(resource(42L)));
         assertThat(service.delete("42,42,99")).containsExactly(42L);
         var sequence = inOrder(storage, repository, songs);
-        sequence.verify(repository).findAllById(List.of(42L, 99L));
+        sequence.verify(repository).findAllForUpdate(List.of(42L, 99L));
         sequence.verify(storage).delete(location);
         sequence.verify(repository).deleteAllByIdInBatch(List.of(42L));
         sequence.verify(repository).flush();
@@ -184,7 +184,7 @@ class ResourceServiceTest {
 
     @Test
     void storageDeletionFailureStopsDatabaseAndSongDeletion() {
-        when(repository.findAllById(List.of(42L))).thenReturn(List.of(resource(42L)));
+        when(repository.findAllForUpdate(List.of(42L))).thenReturn(List.of(resource(42L)));
         var failure = new ResourceStorageException("deletion", new IllegalStateException("Offline"));
         doThrow(failure).when(storage).delete(location);
         assertThatThrownBy(() -> service.delete("42")).isSameAs(failure);
@@ -194,7 +194,7 @@ class ResourceServiceTest {
 
     @Test
     void databaseDeletionFailureStopsSongDeletion() {
-        when(repository.findAllById(List.of(42L))).thenReturn(List.of(resource(42L)));
+        when(repository.findAllForUpdate(List.of(42L))).thenReturn(List.of(resource(42L)));
         var failure = new IllegalStateException("Delete failed");
         doThrow(failure).when(repository).flush();
         assertThatThrownBy(() -> service.delete("42")).isSameAs(failure);

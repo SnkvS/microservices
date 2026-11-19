@@ -45,6 +45,7 @@ public class ProcessorClientConfiguration {
 
     public static boolean isTransient(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof com.example.processor.messaging.ResourceProcessedPublicationException) return true;
             if (cause instanceof ResourceAccessException) return true;
             if (cause instanceof RestClientResponseException response)
                 return response.getStatusCode().is5xxServerError()

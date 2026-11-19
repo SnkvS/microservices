@@ -22,13 +22,12 @@ class S3ResourceStorageTest {
 
     private final S3Client client = mock(S3Client.class);
 
-    private final S3ResourceStorage storage = new S3ResourceStorage(client, "resources");
+    private final S3ResourceStorage storage = new S3ResourceStorage(client);
 
     @Test
     void storesOriginalBytesWithMp3ContentTypeAndReturnsDurableLocation() throws Exception {
         byte[] bytes = new byte[]{0, 1, (byte) 255, 42};
-        assertThat(storage.put("resources/test.mp3", bytes))
-                .isEqualTo(new StoredResourceLocation("resources", "resources/test.mp3"));
+        storage.put(new StoredResourceLocation("resources", "resources/test.mp3"),bytes);
         var request = ArgumentCaptor.forClass(PutObjectRequest.class);
         var body = ArgumentCaptor.forClass(RequestBody.class);
         verify(client).putObject(request.capture(), body.capture());
@@ -71,7 +70,7 @@ class S3ResourceStorageTest {
         var failure = S3Exception.builder().statusCode(503).message("Unavailable").build();
         when(client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(failure);
         when(client.deleteObject(any(DeleteObjectRequest.class))).thenThrow(failure);
-        assertThatThrownBy(() -> storage.put("key", new byte[]{1}))
+        assertThatThrownBy(() -> storage.put(new StoredResourceLocation("resources","key"), new byte[]{1}))
                 .isInstanceOf(ResourceStorageException.class).hasCause(failure);
         assertThatThrownBy(() -> storage.delete(new StoredResourceLocation("resources", "key")))
                 .isInstanceOf(ResourceStorageException.class).hasCause(failure);

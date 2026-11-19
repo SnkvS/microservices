@@ -7,3 +7,5 @@ services:
     ports: [ "127.0.0.1:${RESOURCE_SERVICE_PORT:-8080}:8080" ]
   resource-processor:
     ports: [ "127.0.0.1:${PROCESSOR_PORT:-8083}:8083" ]
+  storage-service:
+    ports: [ "127.0.0.1:${STORAGE_SERVICE_PORT:-8084}:8084" ]

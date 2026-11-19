@@ -15,33 +15,52 @@ class ResourceProcessingServiceTest {
 
     private final ResourceClient resources = mock(ResourceClient.class);
     private final SongClient songs = mock(SongClient.class);
-    private final ResourceProcessingService service = new ResourceProcessingService(resources, new Mp3MetadataExtractor(), songs);
+    private final com.example.processor.messaging.ResourceProcessedPublisher publisher = mock(com.example.processor.messaging.ResourceProcessedPublisher.class);
+    private final ResourceProcessingService service = new ResourceProcessingService(resources, new Mp3MetadataExtractor(), songs, publisher);
 
     @Test
     void downloadsBinaryExtractsMetadataAndSavesUnderTheResourceId() throws Exception {
         byte[] bytes = getClass().getResourceAsStream("/mp3/valid.mp3").readAllBytes();
         when(resources.download(42)).thenReturn(bytes);
         service.process(42);
-        verify(songs).save(new SongMetadata(42L, "Test Title", "Test Artist", "Test Album", "00:07", "2025"));
+        var order=inOrder(songs,publisher);
+        order.verify(songs).save(new SongMetadata(42L, "Test Title", "Test Artist", "Test Album", "00:07", "2025"));
+        order.verify(publisher).publish(42L);
     }
 
     @Test
     void deletedResourceIsAnObsoleteEvent() {
         when(resources.download(42)).thenThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "missing", null, null, null));
         service.process(42);
-        verifyNoInteractions(songs);
+        verifyNoInteractions(songs,publisher);
     }
 
     @Test
     void invalidMetadataIsNotSaved() throws Exception {
         when(resources.download(42)).thenReturn(getClass().getResourceAsStream("/mp3/missing-tags.mp3").readAllBytes());
         assertThatThrownBy(() -> service.process(42)).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(songs);
+        verifyNoInteractions(songs,publisher);
+    }
+
+    @Test
+    void publicationFailurePropagatesAfterSavingMetadata() throws Exception {
+        when(resources.download(42)).thenReturn(getClass().getResourceAsStream("/mp3/valid.mp3").readAllBytes());
+        var failure=new com.example.processor.messaging.ResourceProcessedPublicationException(42,new IllegalStateException("offline"));
+        doThrow(failure).when(publisher).publish(42);
+        assertThatThrownBy(()->service.process(42)).isSameAs(failure);
+    }
+
+    @Test
+    void failedSongSavingDoesNotPublishCompletion() throws Exception {
+        when(resources.download(42)).thenReturn(getClass().getResourceAsStream("/mp3/valid.mp3").readAllBytes());
+        doThrow(new IllegalStateException("conflicting metadata")).when(songs).save(any());
+        assertThatThrownBy(()->service.process(42)).isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(publisher);
     }
 
     @Test
     void invalidIdsAreRejectedBeforeHttpCalls() {
         assertThatThrownBy(() -> service.process(0)).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(resources, songs);
+        verifyNoInteractions(resources, songs,publisher);
     }
 }

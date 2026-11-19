@@ -32,7 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = "eureka.client.enabled=false")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {"eureka.client.enabled=false","spring.rabbitmq.listener.simple.auto-startup=false","spring.rabbitmq.dynamic=false"})
 class ResourceDeletionTransactionTest {
 
     @Container
@@ -112,7 +112,7 @@ class ResourceDeletionTransactionTest {
     @Test
     void databaseSchemaContainsLocationsAndNoBinaryColumn() {
         assertThat(jdbc.queryForList("select column_name from information_schema.columns where table_name='resources' order by ordinal_position", String.class))
-                .containsExactly("id", "storage_bucket", "object_key");
+                .containsExactly("id", "storage_bucket", "object_key", "state", "promotion_target_bucket", "promotion_target_key", "cleanup_source_bucket", "cleanup_source_key");
     }
 
     private ResourceEntity saveResource() {

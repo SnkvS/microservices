@@ -7,3 +7,6 @@ target/
 *.iml
 *.log
 java-courses-main.zip
+
+# Disposable verification evidence and copied application jars
+output/

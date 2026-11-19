@@ -29,16 +29,24 @@ class S3ResourceStorageIT {
                         LOCALSTACK.getAccessKey(), LOCALSTACK.getSecretKey()))).build()) {
             String bucket = "integration-" + UUID.randomUUID();
             client.createBucket(request -> request.bucket(bucket));
-            var storage = new S3ResourceStorage(client, bucket);
+            var storage = new S3ResourceStorage(client);
             byte[] bytes;
             try (var input = getClass().getResourceAsStream("/mp3/valid.mp3")) {
                 bytes = input.readAllBytes();
             }
-            var location = storage.put("recording.mp3", bytes);
+            var location = new StoredResourceLocation(bucket,"recording.mp3");
+            storage.put(location,bytes);
             assertThat(location).isEqualTo(new StoredResourceLocation(bucket, "recording.mp3"));
             assertThat(storage.get(location)).containsExactly(bytes);
             assertThat(client.headObject(request -> request.bucket(bucket).key("recording.mp3")).contentType())
                     .isEqualTo("audio/mpeg");
+            String targetBucket="permanent-"+UUID.randomUUID();
+            client.createBucket(request->request.bucket(targetBucket));
+            var target=new StoredResourceLocation(targetBucket,"archive/recording.mp3");
+            storage.copy(location,target);
+            assertThat(storage.get(target)).containsExactly(bytes);
+            assertThat(client.headObject(request->request.bucket(targetBucket).key(target.key())).contentType()).isEqualTo("audio/mpeg");
+            storage.delete(target);
             storage.delete(location);
             assertThat(client.listObjectsV2(request -> request.bucket(bucket)).contents()).isEmpty();
             storage.delete(location);

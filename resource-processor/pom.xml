@@ -175,6 +175,17 @@
                     </execution></executions>
                 </plugin>
 
+                <plugin>
+                    <groupId>org.springframework.cloud</groupId>
+                    <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+                    <version>${spring-cloud-contract.version}</version>
+                    <executions><execution><goals><goal>generateTests</goal><goal>convert</goal><goal>generateStubs</goal></goals></execution></executions>
+                    <configuration>
+                        <testFramework>JUNIT5</testFramework>
+                        <basePackageForTests>com.example.processor.contract</basePackageForTests>
+                        <baseClassForTests>com.example.processor.contract.ProcessedMessagingContractBase</baseClassForTests>
+                    </configuration>
+                </plugin>
             </plugins></build>
         </profile>
         <profile>
