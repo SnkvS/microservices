@@ -22,6 +22,14 @@ public class ResourceEntity {
     @Column(name = "object_key", nullable = false, length = 1024)
     public String objectKey;
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(nullable=false,length=16)
+    public ResourceState state=ResourceState.STAGING;
+    @Column(name="promotion_target_bucket") public String promotionTargetBucket;
+    @Column(name="promotion_target_key",length=1024) public String promotionTargetKey;
+    @Column(name="cleanup_source_bucket") public String cleanupSourceBucket;
+    @Column(name="cleanup_source_key",length=1024) public String cleanupSourceKey;
+
     protected ResourceEntity() {
     }
 

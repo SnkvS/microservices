@@ -11,22 +11,28 @@ public class S3ResourceStorage implements ResourceStorage {
 
     private final S3Client client;
 
-    private final String bucket;
-
-    public S3ResourceStorage(S3Client client, String bucket) {
+    public S3ResourceStorage(S3Client client) {
         this.client = client;
-        this.bucket = bucket;
     }
 
     @Override
-    public StoredResourceLocation put(String key, byte[] data) {
+    public void put(StoredResourceLocation location, byte[] data) {
         try {
-            client.putObject(PutObjectRequest.builder().bucket(bucket).key(key)
+            client.putObject(PutObjectRequest.builder().bucket(location.bucket()).key(location.key())
                     .contentType("audio/mpeg").build(), RequestBody.fromBytes(data));
-            return new StoredResourceLocation(bucket, key);
         } catch (SdkException ex) {
             throw new ResourceStorageException("upload", ex);
         }
+    }
+
+    @Override
+    public void copy(StoredResourceLocation source,StoredResourceLocation target) {
+        try {
+            String encoded=java.net.URLEncoder.encode(source.bucket()+"/"+source.key(),java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("+","%20").replace("%2F","/");
+            client.copyObject(software.amazon.awssdk.services.s3.model.CopyObjectRequest.builder()
+                    .copySource(encoded).bucket(target.bucket()).key(target.key()).build());
+        } catch (SdkException ex) { throw new ResourceStorageException("copy",ex); }
     }
 
     @Override

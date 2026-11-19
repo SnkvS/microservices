@@ -82,3 +82,7 @@ Run `./scripts/verify-module-5.ps1 -Mode Docker` from the repository root for
 real Eureka registration and load-balancing verification against two Song
 containers. Use `-Mode Local` to check local Java application processes against
 isolated Docker infrastructure. See [verification results](../docs/module-5-verification.md).
+
+### Storage route (Module 6)
+
+Paths /storages and /storages/** use lb://storage-service. POST/GET/DELETE bodies, CSV queries and response arrays are forwarded unchanged. Storage discovery is independent of Resource availability; stopping Storage does not gate Resource startup or health.

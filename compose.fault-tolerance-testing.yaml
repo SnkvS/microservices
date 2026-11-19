@@ -1,0 +1,9 @@
+# Disposable verification overrides; no production diagnostic endpoints.
+services:
+  rabbitmq:
+    ports: [ "127.0.0.1::15672" ]
+  resource-service:
+    environment:
+      STORAGE_BREAKER_OPEN_MILLIS: "2000"
+      STORAGE_CONNECT_TIMEOUT: "500"
+      STORAGE_READ_TIMEOUT: "1000"

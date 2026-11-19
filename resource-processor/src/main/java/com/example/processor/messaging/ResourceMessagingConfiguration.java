@@ -24,9 +24,23 @@ public class ResourceMessagingConfiguration {
         var processing = QueueBuilder.durable(queue).deadLetterExchange(dead.getName())
                 .deadLetterRoutingKey("resource.failed").build();
         var failed = QueueBuilder.durable("resource.processing.dlq").build();
-        return new Declarables(events, dead, processing, failed,
+        var promotion=QueueBuilder.durable("resource.promotion").deadLetterExchange(dead.getName())
+                .deadLetterRoutingKey("resource.promotion.failed").build();
+        var promotionFailed=QueueBuilder.durable("resource.promotion.dlq").build();
+        return new Declarables(events, dead, processing, failed, promotion, promotionFailed,
+                BindingBuilder.bind(promotion).to(events).with("resource.processed"),
+                BindingBuilder.bind(promotionFailed).to(dead).with("resource.promotion.failed"),
                 BindingBuilder.bind(processing).to(events).with(routingKey),
                 BindingBuilder.bind(failed).to(dead).with("resource.failed"));
+    }
+
+    @Bean
+    RetryTemplate processedPublishRetry(
+            @Value("${processed.publish.max-attempts:3}") int attempts,
+            @Value("${processed.publish.initial-delay:1000}") long delay,
+            @Value("${processed.publish.max-delay:5000}") long maxDelay) {
+        return RetryTemplate.builder().maxAttempts(attempts).exponentialBackoff(delay,2,maxDelay)
+                .retryOn(org.springframework.amqp.AmqpException.class).build();
     }
 
     @Bean

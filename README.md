@@ -136,3 +136,13 @@ requires Java on PATH. Reports and local application logs are saved under
 `output/module-5/<project>/`.
 
 See [Module 5 verification](docs/module-5-verification.md) for actual results.
+
+## Module 6: Storage and fault tolerance
+
+Storage Service owns STAGING/PERMANENT bucket/prefix definitions in an independent PostgreSQL database. The Gateway exposes POST /storages, GET /storages, and DELETE /storages?id=... . Multiple definitions per type are allowed; Resource selects the lowest ID.
+
+Resource uploads to STAGING and records its physical location before processing. Processor confirms a completion event after saving metadata; Resource performs restartable S3 copy/state update/source cleanup to PERMANENT. Resource uses Resilience4j and matching configured fallback definitions when Storage is unavailable, including cold startup. Downloads/deletions use saved physical locations.
+
+Normal Compose keeps business services internal. Add compose.development.yaml for the single-instance Storage debug port 8084; its database development port is 5434. Configure matching seed/fallback defaults through STAGING_STORAGE_BUCKET/PATH and PERMANENT_STORAGE_BUCKET/PATH in .env.example.
+
+Run ./scripts/test.ps1 -Suite All for all automated categories, and ./scripts/verify-module-6.ps1 -Mode Docker for actual Storage stop/restart checks. See [Module 6 verification](docs/module-6-verification.md) for local execution, evidence, recovery behavior and the existing-database migration.

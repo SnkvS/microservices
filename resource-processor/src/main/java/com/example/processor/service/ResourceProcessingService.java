@@ -17,11 +17,13 @@ public class ResourceProcessingService {
     private final ResourceClient resources;
     private final Mp3MetadataExtractor extractor;
     private final SongClient songs;
+    private final com.example.processor.messaging.ResourceProcessedPublisher publisher;
 
-    public ResourceProcessingService(ResourceClient resources, Mp3MetadataExtractor extractor, SongClient songs) {
+    public ResourceProcessingService(ResourceClient resources, Mp3MetadataExtractor extractor, SongClient songs, com.example.processor.messaging.ResourceProcessedPublisher publisher) {
         this.resources = resources;
         this.extractor = extractor;
         this.songs = songs;
+        this.publisher = publisher;
     }
 
     public void process(long resourceId) {
@@ -36,6 +38,7 @@ public class ResourceProcessingService {
         var metadata = extractor.extract(data);
         songs.save(new SongMetadata(resourceId, metadata.name(), metadata.artist(), metadata.album(),
                 metadata.duration(), metadata.year()));
+        publisher.publish(resourceId);
         log.info("Processed resource {}", resourceId);
     }
 }

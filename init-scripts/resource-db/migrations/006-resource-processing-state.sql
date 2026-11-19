@@ -1,0 +1,11 @@
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS state VARCHAR(16);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS promotion_target_bucket VARCHAR(255);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS promotion_target_key VARCHAR(1024);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS cleanup_source_bucket VARCHAR(255);
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS cleanup_source_key VARCHAR(1024);
+UPDATE resources SET state='PERMANENT' WHERE state IS NULL;
+ALTER TABLE resources ALTER COLUMN state SET NOT NULL;
+ALTER TABLE resources ALTER COLUMN state DROP DEFAULT;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='resource_state' AND conrelid='resources'::regclass) THEN ALTER TABLE resources ADD CONSTRAINT resource_state CHECK (state IN ('STAGING','PERMANENT')); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='resource_promotion_pair' AND conrelid='resources'::regclass) THEN ALTER TABLE resources ADD CONSTRAINT resource_promotion_pair CHECK ((promotion_target_bucket IS NULL) = (promotion_target_key IS NULL)); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='resource_cleanup_pair' AND conrelid='resources'::regclass) THEN ALTER TABLE resources ADD CONSTRAINT resource_cleanup_pair CHECK ((cleanup_source_bucket IS NULL) = (cleanup_source_key IS NULL)); END IF; END $$;

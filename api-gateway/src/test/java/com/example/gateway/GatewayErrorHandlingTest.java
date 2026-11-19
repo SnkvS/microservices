@@ -63,13 +63,16 @@ class GatewayErrorHandlingTest {
         properties.add(prefix + "[1].id", () -> "resource-service");
         properties.add(prefix + "[1].uri", () -> "lb://resource-service");
         properties.add(prefix + "[1].predicates[0]", () -> "Path=/resources,/resources/**");
-        properties.add(prefix + "[2].id", () -> "offline");
-        properties.add(prefix + "[2].uri", () -> "lb://offline");
-        properties.add(prefix + "[2].predicates[0]", () -> "Path=/offline");
-        properties.add(prefix + "[3].id", () -> "slow");
-        properties.add(prefix + "[3].uri", () -> "lb://slow");
-        properties.add(prefix + "[3].predicates[0]", () -> "Path=/slow");
-        properties.add(prefix + "[3].metadata.response-timeout", () -> 100);
+        properties.add(prefix + "[2].id", () -> "storage-service");
+        properties.add(prefix + "[2].uri", () -> "lb://storage-service");
+        properties.add(prefix + "[2].predicates[0]", () -> "Path=/storages,/storages/**");
+        properties.add(prefix + "[3].id", () -> "offline");
+        properties.add(prefix + "[3].uri", () -> "lb://offline");
+        properties.add(prefix + "[3].predicates[0]", () -> "Path=/offline");
+        properties.add(prefix + "[4].id", () -> "slow");
+        properties.add(prefix + "[4].uri", () -> "lb://slow");
+        properties.add(prefix + "[4].predicates[0]", () -> "Path=/slow");
+        properties.add(prefix + "[4].metadata.response-timeout", () -> 100);
     }
 
     @AfterAll

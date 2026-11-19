@@ -56,7 +56,10 @@ function Start-Java([string]$Module, [hashtable]$Environment) {
     $directory = Join-Path $work $Module
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
     $jar = Join-Path $directory 'app.jar'
-    Copy-Item -LiteralPath (Join-Path $repository "$Module/target/$Module-1.0.0.jar") -Destination $jar
+    # Freeze one build per owned run; restarts must not depend on a concurrently rebuilt target.
+    if (!(Test-Path -LiteralPath $jar)) {
+        Copy-Item -LiteralPath (Join-Path $repository "$Module/target/$Module-1.0.0.jar") -Destination $jar
+    }
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = (Get-Command java -ErrorAction Stop).Source
     $info.WorkingDirectory = $directory
@@ -113,8 +116,8 @@ try {
         $registryPort = Get-Port 'eureka-server' 8761
         $expectedSongs = 2
     } else {
-        Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', '180', 'resource-db', 'song-db', 'rabbitmq', 'localstack') | Out-Host
-        foreach ($module in @('eureka-server', 'song-service', 'resource-service', 'resource-processor', 'api-gateway')) {
+        Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', '180', 'resource-db', 'song-db', 'storage-db', 'rabbitmq', 'localstack') | Out-Host
+        foreach ($module in @('eureka-server', 'song-service', 'storage-service', 'resource-service', 'resource-processor', 'api-gateway')) {
             Invoke-Maven $module @('-Dmaven.test.skip=true', 'package')
         }
         $registryPort = Get-FreePort
@@ -127,6 +130,10 @@ try {
             RESOURCE_DB_USER = 'resources'; RESOURCE_DB_PASSWORD = 'resources'
             SONG_DB_URL = "jdbc:postgresql://localhost:$(Get-Port 'song-db' 5432)/songs"
             SONG_DB_USER = 'songs'; SONG_DB_PASSWORD = 'songs'
+            STORAGE_DB_URL = "jdbc:postgresql://localhost:$(Get-Port 'storage-db' 5432)/storages"
+            STORAGE_DB_USER = 'storages'; STORAGE_DB_PASSWORD = 'storages'
+            STAGING_STORAGE_BUCKET = 'resources-staging'; STAGING_STORAGE_PATH = '/files'
+            PERMANENT_STORAGE_BUCKET = 'resources-permanent'; PERMANENT_STORAGE_PATH = '/files'
             RABBITMQ_HOST = 'localhost'; RABBITMQ_PORT = Get-Port 'rabbitmq' 5672
             RABBITMQ_USER = 'resources'; RABBITMQ_PASSWORD = 'resources'
             RESOURCE_STORAGE_ENDPOINT = "http://localhost:$(Get-Port 'localstack' 4566)"
@@ -143,7 +150,7 @@ try {
             if ($health.status -ne 'UP') { throw 'Eureka is not UP' }
         }
         foreach ($entry in @(
-            @('song-service', 'SONG_SERVICE_PORT'), @('resource-service', 'RESOURCE_SERVICE_PORT'),
+            @('song-service', 'SONG_SERVICE_PORT'), @('storage-service', 'STORAGE_SERVICE_PORT'), @('resource-service', 'RESOURCE_SERVICE_PORT'),
             @('resource-processor', 'PROCESSOR_PORT'), @('api-gateway', 'GATEWAY_PORT')
         )) {
             $environment = $common.Clone()

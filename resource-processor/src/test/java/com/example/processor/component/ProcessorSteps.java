@@ -81,6 +81,7 @@ public class ProcessorSteps {
 
     @Before
     public void clearRequestJournals() {
+        rabbit.execute(channel -> { channel.queuePurge("resource.promotion"); return null; });
         acknowledgementsBefore = queueState().path("message_stats").path("ack").asLong();
         for (String provider : new String[]{"resource-service", "song-service"}) {
             RestClient.create(stubs.findStubUrl(provider).toString()).delete().uri("/__admin/requests")
@@ -114,6 +115,7 @@ public class ProcessorSteps {
                     "{\"id\":42,\"name\":\"Test Title\",\"artist\":\"Test Artist\",\"album\":\"Test Album\",\"duration\":\"00:07\",\"year\":\"2025\"}"));
         });
         noFailedMessage();
+        completionPublished(42);
     }
 
     @Then("the existing metadata is checked and the notification completes successfully")
@@ -121,6 +123,7 @@ public class ProcessorSteps {
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
                 assertThat(requests("song-service").toString()).contains("/songs/43"));
         noFailedMessage();
+        completionPublished(43);
     }
 
     @Then("no metadata is created and the notification completes successfully")
@@ -129,6 +132,14 @@ public class ProcessorSteps {
                 assertThat(requests("resource-service").toString()).contains("/resources/99"));
         noFailedMessage();
         assertThat(requests("song-service").path("requests")).isEmpty();
+        assertThat(rabbit.receive("resource.promotion",300)).isNull();
+    }
+
+    private void completionPublished(long id) {
+        var message=rabbit.receive("resource.promotion",2000);
+        assertThat(message).isNotNull();
+        try { assertThat(mapper.readTree(message.getBody()).path("resourceId").longValue()).isEqualTo(id); }
+        catch (java.io.IOException failure) { throw new AssertionError(failure); }
     }
 
     private JsonNode requests(String provider) {
