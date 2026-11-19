@@ -13,8 +13,8 @@ query strings and bodies, including binary MP3 uploads and downloads.
 
 Run from the repository root:
 
-For first-time setup, copy `.env.example` to `.env`. If `.env` already exists,
-keep its settings and add `GATEWAY_PORT=8082` if needed.
+Defaults work without a `.env` file. Optional overrides are documented in
+`.env.example`; preserve any existing `.env` settings.
 
 ```powershell
 docker compose up -d --build --scale song-service=2
@@ -25,16 +25,21 @@ is `8082`. Check `http://localhost:8082/actuator/health` and the Eureka dashboar
 at `http://localhost:8761`. Allow a few seconds for service discovery to refresh
 after startup. Both Song instances and Resource Service should be registered.
 
+Normal Compose publishes only the Gateway's business API port; backend application
+ports remain internal. For single-instance debugging with fixed backend host ports,
+use `docker compose -f compose.yaml -f compose.development.yaml up -d --build`.
+Do not select that override when scaling Song Service.
+
 ## Local execution
 
-Use Java 17 or a compatible later JDK. Start the databases in Docker, then run
-Eureka Server, Song Service, Resource Service and API Gateway from their main
+Use Java 17 or a compatible later JDK. Start infrastructure in Docker, then run
+Eureka Server, Song Service, Resource Service, Resource Processor and API Gateway from their main
 classes in IntelliJ. Stop the Docker application containers first to free the
 local ports and avoid registering Docker instances in the local registry:
 
 ```powershell
-docker compose stop api-gateway resource-service song-service eureka-server
-docker compose up -d resource-db song-db
+docker compose stop api-gateway resource-service song-service resource-processor eureka-server
+docker compose up -d --wait resource-db song-db rabbitmq localstack
 mvn -f api-gateway/pom.xml clean package
 java -jar api-gateway/target/api-gateway-1.0.0.jar
 ```
@@ -65,3 +70,15 @@ mvn -f api-gateway/pom.xml test
 Tests send real HTTP requests through the gateway to two discovered Song
 backends and one Resource backend. They check balancing, binary preservation,
 delete query parameters and downstream error responses.
+
+Gateway-owned errors use the same `errorCode` / `errorMessage` JSON envelope as
+the APIs. Undefined routes return 404, missing or unreachable services return
+503, and upstream response timeouts return 504. Downstream API responses are
+forwarded unchanged. The default connect timeout is 2 seconds and response
+timeout is 10 seconds; override `GATEWAY_CONNECT_TIMEOUT` (milliseconds) and
+`GATEWAY_RESPONSE_TIMEOUT` (for example, `20s`) if needed.
+
+Run `./scripts/verify-module-5.ps1 -Mode Docker` from the repository root for
+real Eureka registration and load-balancing verification against two Song
+containers. Use `-Mode Local` to check local Java application processes against
+isolated Docker infrastructure. See [verification results](../docs/module-5-verification.md).
