@@ -1,0 +1,49 @@
+# Disposable Module 7 observability; combine with compose.testing.yaml.
+services:
+  eureka-server:
+    environment:
+      LOGGING_FILE_NAME: /var/log/services/eureka-server/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  storage-service:
+    environment:
+      LOGGING_FILE_NAME: /var/log/services/storage-service/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  song-service:
+    environment:
+      LOGGING_FILE_NAME: /var/log/services/song-service/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  resource-service:
+    environment:
+      LOGGING_FILE_NAME: /var/log/services/resource-service/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  resource-processor:
+    environment:
+      LOGGING_FILE_NAME: /var/log/services/resource-processor/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  api-gateway:
+    environment:
+      SPRING_APPLICATION_JSON: '{"logging.logback.rollingpolicy.max-file-size":"10KB"}'
+      LOGGING_FILE_NAME: /var/log/services/api-gateway/$${HOSTNAME}.json
+    volumes: [ "application-logs:/var/log/services" ]
+  elasticsearch:
+    extends: { file: compose.yaml, service: elasticsearch }
+    ports: !override [ "127.0.0.1::9200" ]
+  fluent-bit:
+    extends: { file: compose.yaml, service: fluent-bit }
+  prometheus:
+    extends: { file: compose.yaml, service: prometheus }
+    ports: !override [ "127.0.0.1::9090" ]
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_USER: verification
+      GF_SECURITY_ADMIN_PASSWORD: module7-verification
+    extends: { file: compose.yaml, service: grafana }
+    ports: !override [ "127.0.0.1::3000" ]
+  rabbitmq:
+    ports: [ "127.0.0.1::15672" ]
+volumes:
+  application-logs:
+  elasticsearch-data:
+  fluent-bit-state:
+  prometheus-data:
+  grafana-data:

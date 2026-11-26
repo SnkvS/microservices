@@ -1,5 +1,6 @@
 package com.example.processor.messaging;
 
+import com.example.processor.observability.TraceContext;
 import com.example.processor.service.ResourceProcessingService;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,20 +27,25 @@ public class ResourceUploadedListener {
 
     @RabbitListener(id = "resourceUploaded", queues = "${resource.messaging.queue:resource.processing}")
     public void receive(Message message) {
-        Long resourceId = null;
-        try {
-            var event = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(message.getBody());
-            var id = event == null ? null : event.get("resourceId");
-            if (id == null || !id.isIntegralNumber() || !id.canConvertToLong() || id.longValue() <= 0)
-                throw new IllegalArgumentException("Event requires a positive integral resourceId");
-            resourceId = id.longValue();
-            service.process(resourceId);
-        } catch (IOException ex) {
-            log.warn("Invalid resource event: {}", ex.getMessage());
-            throw new IllegalArgumentException("Invalid resource event JSON", ex);
-        } catch (RuntimeException ex) {
-            log.warn("Resource event {} failed: {}", resourceId, ex.getMessage());
-            throw ex;
+        try (var trace = TraceContext.open(message.getMessageProperties().getHeader("X-Trace-ID"))) {
+            message.getMessageProperties().setHeader("X-Trace-ID", trace.id());
+            Long resourceId = null;
+            try {
+                var event = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(message.getBody());
+                var id = event == null ? null : event.get("resourceId");
+                if (id == null || !id.isIntegralNumber() || !id.canConvertToLong() || id.longValue() <= 0)
+                    throw new IllegalArgumentException("Event requires a positive integral resourceId");
+                resourceId = id.longValue();
+                log.info("Processing resource event {}", resourceId);
+                service.process(resourceId);
+                log.info("Completed resource event {}", resourceId);
+            } catch (IOException ex) {
+                log.warn("Invalid resource event: {}", ex.getMessage());
+                throw new IllegalArgumentException("Invalid resource event JSON", ex);
+            } catch (RuntimeException ex) {
+                log.warn("Resource event {} failed: {}", resourceId, ex.getMessage());
+                throw ex;
+            }
         }
     }
 }

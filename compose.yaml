@@ -117,7 +117,9 @@ services:
   eureka-server:
     build: ./eureka-server
     ports: [ "${EUREKA_SERVER_PORT:-8761}:8761" ]
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/eureka-server/$${HOSTNAME}.json
       EUREKA_SERVER_HOSTNAME: ${EUREKA_SERVER_HOSTNAME:-eureka-server}
       EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
     healthcheck:
@@ -126,7 +128,9 @@ services:
 
   storage-service:
     build: ./storage-service
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/storage-service/$${HOSTNAME}.json
       <<: [ *discovery, *storage-locations ]
       STORAGE_DB_URL: ${STORAGE_DB_URL:-jdbc:postgresql://storage-db:5432/${STORAGE_DB_NAME:-storages}}
       STORAGE_DB_USER: ${STORAGE_DB_USER:-storages}
@@ -141,7 +145,9 @@ services:
 
   song-service:
     build: ./song-service
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/song-service/$${HOSTNAME}.json
       <<: *discovery
       SONG_DB_URL: ${SONG_DB_URL:-jdbc:postgresql://song-db:5432/${SONG_DB_NAME:-songs}}
       SONG_DB_USER: ${SONG_DB_USER:-songs}
@@ -155,7 +161,9 @@ services:
 
   resource-service:
     build: ./resource-service
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/resource-service/$${HOSTNAME}.json
       <<: [ *discovery, *messaging, *http-retry, *storage-locations ]
       RESOURCE_DB_URL: ${RESOURCE_DB_URL:-jdbc:postgresql://resource-db:5432/${RESOURCE_DB_NAME:-resources}}
       RESOURCE_DB_USER: ${RESOURCE_DB_USER:-resources}
@@ -181,7 +189,9 @@ services:
 
   resource-processor:
     build: ./resource-processor
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/resource-processor/$${HOSTNAME}.json
       <<: [ *discovery, *messaging, *http-retry ]
       RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://resource-service}
       SONG_SERVICE_URL: ${SONG_SERVICE_URL:-http://song-service}
@@ -200,7 +210,9 @@ services:
   api-gateway:
     build: ./api-gateway
     ports: [ "${GATEWAY_PORT:-8082}:8082" ]
+    volumes: [ "application-logs:/var/log/services" ]
     environment:
+      LOGGING_FILE_NAME: /var/log/services/api-gateway/$${HOSTNAME}.json
       <<: *discovery
       GATEWAY_CONNECT_TIMEOUT: ${GATEWAY_CONNECT_TIMEOUT:-2000}
       GATEWAY_RESPONSE_TIMEOUT: ${GATEWAY_RESPONSE_TIMEOUT:-10s}
@@ -213,5 +225,68 @@ services:
       song-service: { condition: service_healthy }
       resource-processor: { condition: service_healthy }
 
+  elasticsearch:
+    image: ${ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.19.7}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports: [ "127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200" ]
+    volumes: [ "elasticsearch-data:/usr/share/elasticsearch/data" ]
+    healthcheck:
+      test: [ CMD-SHELL, "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null" ]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+  fluent-bit:
+    image: ${FLUENT_BIT_IMAGE:-fluent/fluent-bit:4.2.0}
+    volumes:
+      - ./observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./observability/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - application-logs:/var/log/services:ro
+      - fluent-bit-state:/var/lib/fluent-bit
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.7.3}
+    command: [ --config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=7d ]
+    ports: [ "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090" ]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://localhost:9090/-/ready" ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.3.0}
+    ports: [ "127.0.0.1:${GRAFANA_PORT:-3000}:3000" ]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-monitoring}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+      prometheus: { condition: service_healthy }
+    healthcheck:
+      test: [ CMD-SHELL, "wget -q -O /dev/null http://localhost:3000/api/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
 volumes:
   rabbitmq-data:
+  application-logs:
+  elasticsearch-data:
+  fluent-bit-state:
+  prometheus-data:
+  grafana-data:

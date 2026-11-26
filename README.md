@@ -146,3 +146,9 @@ Resource uploads to STAGING and records its physical location before processing.
 Normal Compose keeps business services internal. Add compose.development.yaml for the single-instance Storage debug port 8084; its database development port is 5434. Configure matching seed/fallback defaults through STAGING_STORAGE_BUCKET/PATH and PERMANENT_STORAGE_BUCKET/PATH in .env.example.
 
 Run ./scripts/test.ps1 -Suite All for all automated categories, and ./scripts/verify-module-6.ps1 -Mode Docker for actual Storage stop/restart checks. See [Module 6 verification](docs/module-6-verification.md) for local execution, evidence, recovery behavior and the existing-database migration.
+
+## Module 7: Monitoring
+
+The Compose stack includes persistent Elasticsearch logs collected by Fluent Bit, Prometheus metrics and provisioned Grafana dashboards. Upload responses return `X-Trace-ID`, propagated through downstream HTTP calls and both RabbitMQ events. Open Grafana at http://localhost:3000 (development defaults `admin` / `monitoring`) to inspect JVM/Gateway metrics or find all upload logs by trace ID.
+
+Run `./scripts/verify-module-7.ps1` for an isolated live check. See [Module 7 verification](docs/module-7-verification.md) for configuration, test commands, persistence and tracing details.

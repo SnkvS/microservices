@@ -1,5 +1,6 @@
 package com.example.resource.integration;
 
+import com.example.resource.observability.TraceContext;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +22,8 @@ public class SongClientConfiguration {
         requests.setConnectTimeout(connectTimeout);
         requests.setReadTimeout(readTimeout);
         return RestClient.builder().requestFactory(requests).requestInterceptor((request, body, execution) -> {
+            request.getHeaders().set(TraceContext.HEADER,
+                    TraceContext.currentOrCreate());
             try {
                 return execution.execute(request, body);
             } catch (IllegalArgumentException | IllegalStateException failure) {

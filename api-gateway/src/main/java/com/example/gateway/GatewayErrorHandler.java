@@ -1,5 +1,7 @@
 package com.example.gateway;
 
+import com.example.gateway.observability.TraceCorrelationWebFilter;
+import org.slf4j.MDC;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ConnectTimeoutException;
@@ -48,7 +50,15 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
             }
         };
         if (status.value() == 500) {
-            log.error("Gateway request failed", exception);
+            String previous=MDC.get("traceId");
+            String traceId=exchange.getAttribute(TraceCorrelationWebFilter.TRACE_ID_ATTRIBUTE);
+            try {
+                if (traceId != null) MDC.put("traceId",traceId);
+                log.error("Gateway request failed", exception);
+            } finally {
+                if (previous == null) MDC.remove("traceId");
+                else MDC.put("traceId",previous);
+            }
         }
         try {
             byte[] body = json.writeValueAsBytes(Map.of("errorCode", Integer.toString(status.value()),

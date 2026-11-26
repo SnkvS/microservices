@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+scrape_configs:
+  - job_name: eureka-server
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ eureka-server ]
+        type: A
+        port: 8761
+        refresh_interval: 5s
+  - job_name: storage-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ storage-service ]
+        type: A
+        port: 8084
+        refresh_interval: 5s
+  - job_name: song-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ song-service ]
+        type: A
+        port: 8081
+        refresh_interval: 5s
+  - job_name: resource-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ resource-service ]
+        type: A
+        port: 8080
+        refresh_interval: 5s
+  - job_name: resource-processor
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ resource-processor ]
+        type: A
+        port: 8083
+        refresh_interval: 5s
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [ api-gateway ]
+        type: A
+        port: 8082
+        refresh_interval: 5s

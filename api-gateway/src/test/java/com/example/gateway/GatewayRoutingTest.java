@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability
 @SpringBootTest(classes = ApiGatewayApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"eureka.client.enabled=false", "spring.cloud.loadbalancer.cache.enabled=false"})
@@ -159,5 +160,15 @@ class GatewayRoutingTest {
                 .expectBody().json("{\"ids\":[1,2]}");
         assertThat(resourceRequests).containsExactly("POST /resources", "GET /resources/1",
                 "DELETE /resources?id=1,2");
+    }
+
+    @Test
+    void exposesRealPrometheusJvmAndGatewayMetrics() {
+        client.get().uri("/songs/1").exchange().expectStatus().isOk();
+        client.get().uri("/actuator/prometheus").exchange().expectStatus().isOk()
+                .expectBody(String.class).value(body -> {
+                    assertThat(body).contains("jvm_memory_used_bytes", "jvm_threads_live_threads",
+                            "spring_cloud_gateway_requests_seconds_count", "spring_cloud_gateway_requests_seconds_bucket");
+                });
     }
 }
