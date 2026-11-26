@@ -35,6 +35,7 @@ class ResourceUploadedPublisherTest {
             assertThat(message.getMessageProperties().getContentType()).isEqualTo("application/json");
             assertThat(message.getMessageProperties().getMessageId()).isNotBlank();
             assertThat(message.getMessageProperties().getHeaders()).doesNotContainKey("__TypeId__");
+            assertThat((String) message.getMessageProperties().getHeader("X-Trace-ID")).matches("[0-9a-f]{32}");
             ((CorrelationData) call.getArgument(3)).getFuture().complete(new CorrelationData.Confirm(true, null));
             return null;
         }).when(rabbit).send(eq("resources"), eq("resource.uploaded"), any(Message.class), any(CorrelationData.class));
@@ -99,5 +100,22 @@ class ResourceUploadedPublisherTest {
         assertThatThrownBy(() -> publisher.publish(0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> publisher.publish(-1)).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(rabbit);
+    }
+
+    @Test void keepsTheCurrentTraceIdAcrossPublicationRetries() {
+        org.slf4j.MDC.put("traceId", "retry-42");
+        var seen = new java.util.ArrayList<String>();
+        try {
+            doAnswer(call -> {
+                Message message = call.getArgument(2);
+                seen.add((String) message.getMessageProperties().getHeader("X-Trace-ID"));
+                if (seen.size() == 1) throw new org.springframework.amqp.AmqpException("retry");
+                ((CorrelationData) call.getArgument(3)).getFuture().complete(new CorrelationData.Confirm(true, null));
+                return null;
+            }).when(rabbit).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
+            publisher.publish(42);
+            assertThat(seen).containsExactly("retry-42", "retry-42");
+            assertThat(org.slf4j.MDC.get("traceId")).isEqualTo("retry-42");
+        } finally { org.slf4j.MDC.clear(); }
     }
 }

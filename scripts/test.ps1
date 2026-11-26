@@ -41,7 +41,7 @@ try {
             Invoke-Maven 'eureka-server' @('test')
         }
         'Unit' {
-            foreach ($module in @('storage-service', 'song-service', 'resource-service', 'resource-processor', 'api-gateway')) {
+            foreach ($module in @('storage-service', 'song-service', 'resource-service', 'resource-processor', 'api-gateway', 'eureka-server')) {
                 Invoke-Maven $module @('test')
             }
         }

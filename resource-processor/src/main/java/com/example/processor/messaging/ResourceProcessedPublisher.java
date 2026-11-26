@@ -1,7 +1,9 @@
 package com.example.processor.messaging;
 
+import com.example.processor.observability.TraceContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.MDC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpException;
@@ -47,33 +49,36 @@ public class ResourceProcessedPublisher {
     }
 
     public void publish(long resourceId) {
-        if (resourceId <= 0) throw new IllegalArgumentException("Invalid resource ID");
-        var properties = new MessageProperties();
-        properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-        properties.setContentEncoding("UTF-8");
-        properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-        properties.setMessageId(UUID.randomUUID().toString());
-        try {
-            var message = new Message(mapper.writeValueAsBytes(Map.of("resourceId", resourceId)), properties);
-            retry.execute(context -> {
-                var correlation = new CorrelationData(UUID.randomUUID().toString());
-                rabbit.send(exchange, routingKey, message, correlation);
-                try {
-                    var confirmation = correlation.getFuture().get(confirmTimeout, TimeUnit.MILLISECONDS);
-                    if (!confirmation.isAck() || correlation.getReturned() != null)
-                        throw new AmqpException("Resource event was not routed and confirmed");
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    throw new ResourceProcessedPublicationException(resourceId, ex);
-                } catch (ExecutionException | TimeoutException ex) {
-                    throw new AmqpException("Resource publication confirmation failed", ex);
-                }
-                return null;
-            });
-        } catch (JsonProcessingException | RuntimeException ex) {
-            log.error("Resource {} metadata saved but completion notification failed", resourceId, ex);
-            if (ex instanceof ResourceProcessedPublicationException failure) throw failure;
-            throw new ResourceProcessedPublicationException(resourceId, ex);
+        try (var trace = TraceContext.open(MDC.get("traceId"))) {
+            if (resourceId <= 0) throw new IllegalArgumentException("Invalid resource ID");
+            var properties = new MessageProperties();
+            properties.setHeader("X-Trace-ID", trace.id());
+            properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
+            properties.setContentEncoding("UTF-8");
+            properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
+            properties.setMessageId(UUID.randomUUID().toString());
+            try {
+                var message = new Message(mapper.writeValueAsBytes(Map.of("resourceId", resourceId)), properties);
+                retry.execute(context -> {
+                    var correlation = new CorrelationData(UUID.randomUUID().toString());
+                    rabbit.send(exchange, routingKey, message, correlation);
+                    try {
+                        var confirmation = correlation.getFuture().get(confirmTimeout, TimeUnit.MILLISECONDS);
+                        if (!confirmation.isAck() || correlation.getReturned() != null)
+                            throw new AmqpException("Resource event was not routed and confirmed");
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new ResourceProcessedPublicationException(resourceId, ex);
+                    } catch (ExecutionException | TimeoutException ex) {
+                        throw new AmqpException("Resource publication confirmation failed", ex);
+                    }
+                    return null;
+                });
+            } catch (JsonProcessingException | RuntimeException ex) {
+                log.error("Resource {} metadata saved but completion notification failed", resourceId, ex);
+                if (ex instanceof ResourceProcessedPublicationException failure) throw failure;
+                throw new ResourceProcessedPublicationException(resourceId, ex);
+            }
         }
     }
 }

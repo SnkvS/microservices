@@ -35,4 +35,31 @@ class ResourceProcessedListenerTest {
     private Message message(String json) {
         return new Message(json.getBytes(StandardCharsets.UTF_8), new MessageProperties());
     }
+
+    @Test void correlatesProcessingAndRestoresThePreviousContext() {
+        org.slf4j.MDC.put("traceId", "previous");
+        try {
+            doAnswer(call -> {
+                org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("traceId")).isEqualTo("message-42");
+                return null;
+            }).when(service).promote(42);
+            var event = message("{\"resourceId\":42}");
+            event.getMessageProperties().setHeader("X-Trace-ID", "message-42");
+            listener.receive(event);
+            org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("traceId")).isEqualTo("previous");
+        } finally { org.slf4j.MDC.clear(); }
+    }
+
+    @Test void assignsLegacyMessagesAnIdAndRestoresContextAfterFailure() {
+        org.slf4j.MDC.put("traceId", "previous");
+        try {
+            doAnswer(call -> {
+                org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("traceId")).matches("[0-9a-f]{32}");
+                throw new IllegalStateException("processing failed");
+            }).when(service).promote(42);
+            assertThatThrownBy(() -> listener.receive(message("{\"resourceId\":42}")))
+                    .isInstanceOf(IllegalStateException.class);
+            org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("traceId")).isEqualTo("previous");
+        } finally { org.slf4j.MDC.clear(); }
+    }
 }
