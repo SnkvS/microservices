@@ -46,4 +46,4 @@ Implement with regression tests and one independent final review.
 - [x] Upload with a known ID and one generated ID; verify complete promotion and same trace across HTTP + both message hops using Elasticsearch and Grafana datasource API.
 - [x] Prove all six Prometheus targets and real JVM/Gateway series, dashboard provisioning, concurrent IDs, persistent logs across collector/store restart and upload with collector offline.
 - [x] Run full existing suites once, one final review and necessary fixes; record actual counts and limitations.
-- [ ] Commit/push only Module 7 changes and create stacked PR; verify PR #6 remains open, unchanged and unmerged.
+- [x] Commit/push only Module 7 changes and create stacked PR; verify PR #6 remains open, unchanged and unmerged.
